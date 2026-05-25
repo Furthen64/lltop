@@ -96,7 +96,11 @@ func (m *Model) renderStatus() string {
 		runnerActive = m.runner.IsRunning()
 	}
 	if !runnerActive {
-		if proc, err := detectExternalLlamaServer(os.Getpid()); err == nil && proc.PID > 0 {
+		if m.externalProc.PID > 0 {
+			status = "externally running"
+			pid = m.externalProc.PID
+			externalCmd = m.externalProc.Command
+		} else if proc, err := detectExternalLlamaServer(os.Getpid()); err == nil && proc.PID > 0 {
 			status = "externally running"
 			pid = proc.PID
 			externalCmd = proc.Command
