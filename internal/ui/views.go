@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -87,9 +88,19 @@ func (m *Model) renderStatus() string {
 	}
 	status := "stopped"
 	pid := 0
+	externalCmd := ""
+	runnerActive := false
 	if m.runner != nil {
 		status = m.runner.Status
 		pid = m.runner.PID
+		runnerActive = m.runner.IsRunning()
+	}
+	if !runnerActive {
+		if proc, err := detectExternalLlamaServer(os.Getpid()); err == nil && proc.PID > 0 {
+			status = "externally running"
+			pid = proc.PID
+			externalCmd = proc.Command
+		}
 	}
 	b.WriteString(fmt.Sprintf("status: %s", status))
 	if pid > 0 {
@@ -99,6 +110,9 @@ func (m *Model) renderStatus() string {
 		b.WriteString(fmt.Sprintf("  uptime: %s", time.Since(m.runner.StartTime).Truncate(time.Second)))
 	}
 	b.WriteByte('\n')
+	if externalCmd != "" {
+		b.WriteString(fmt.Sprintf("external cmd: %s\n", externalCmd))
+	}
 	b.WriteString(fmt.Sprintf("prompt tok/s: %.2f  eval tok/s: %.2f  offload: %d/%d  progress: %.2f\n",
 		m.stats.PromptTokensPerSec, m.stats.EvalTokensPerSec, m.stats.OffloadedLayers, m.stats.TotalLayers, m.stats.Progress))
 	if m.stats.ChatFormat != "" {
