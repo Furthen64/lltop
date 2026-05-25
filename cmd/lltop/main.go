@@ -34,6 +34,14 @@ func main() {
 		fatal(err)
 	}
 
+	status := ""
+	if created {
+		status, err = config.RunFirstStartWizard(cfg)
+		if err != nil {
+			fatal(err)
+		}
+	}
+
 	profiles, err := config.LoadProfiles(cfg.ProfilesDir)
 	if err != nil {
 		fatal(err)
@@ -68,10 +76,6 @@ func main() {
 		}
 		os.Exit(exitCode)
 	default:
-		status := ""
-		if created {
-			status = "Created config at ~/.config/lltop/ with starter profile. Edit starter.toml before launching."
-		}
 		program := tea.NewProgram(ui.NewModel(cfg, profiles, status), tea.WithAltScreen())
 		if _, err := program.Run(); err != nil {
 			fatal(err)

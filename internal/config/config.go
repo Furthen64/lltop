@@ -11,6 +11,7 @@ import (
 
 type GlobalConfig struct {
 	LlamaServer             string `toml:"llama_server"`
+	ModelsDir               string `toml:"models_dir"`
 	DefaultProfile          string `toml:"default_profile"`
 	ProfilesDir             string `toml:"profiles_dir"`
 	RunsDir                 string `toml:"runs_dir"`
@@ -96,6 +97,12 @@ func (cfg *GlobalConfig) Normalize() error {
 	var err error
 	if cfg.LlamaServer != "" {
 		cfg.LlamaServer, err = ExpandPath(cfg.LlamaServer)
+		if err != nil {
+			return err
+		}
+	}
+	if cfg.ModelsDir != "" {
+		cfg.ModelsDir, err = ExpandPath(cfg.ModelsDir)
 		if err != nil {
 			return err
 		}
@@ -196,6 +203,7 @@ func LoadGlobalConfig() (*GlobalConfig, bool, error) {
 func WriteConfig(path string, cfg *GlobalConfig) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "llama_server = %q\n", cfg.LlamaServer)
+	fmt.Fprintf(&b, "models_dir = %q\n", cfg.ModelsDir)
 	fmt.Fprintf(&b, "default_profile = %q\n", cfg.DefaultProfile)
 	fmt.Fprintf(&b, "profiles_dir = %q\n", cfg.ProfilesDir)
 	fmt.Fprintf(&b, "runs_dir = %q\n", cfg.RunsDir)
