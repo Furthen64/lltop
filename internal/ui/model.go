@@ -526,26 +526,26 @@ func waitForDone(r *runner.Runner) tea.Cmd {
 	if r == nil {
 		return nil
 	}
-
-	func waitForExternalLog(m *Model) tea.Cmd {
-		if m == nil {
-			return nil
-		}
-		return tea.Tick(time.Second, func(time.Time) tea.Msg {
-			if m.runner != nil && m.runner.IsRunning() {
-				return externalLogPollMsg{}
-			}
-			logsDir := ""
-			if m.cfg != nil {
-				logsDir = m.cfg.LogsDir
-			}
-			return pollExternalLog(os.Getpid(), logsDir, m.externalLog, m.externalOffset)
-		})
-	}
 	return func() tea.Msg {
 		info := <-r.DoneCh
 		return runnerDoneMsg{info: info}
 	}
+}
+
+func waitForExternalLog(m *Model) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		if m.runner != nil && m.runner.IsRunning() {
+			return externalLogPollMsg{}
+		}
+		logsDir := ""
+		if m.cfg != nil {
+			logsDir = m.cfg.LogsDir
+		}
+		return pollExternalLog(os.Getpid(), logsDir, m.externalLog, m.externalOffset)
+	})
 }
 
 func openEditor(editor, path string) tea.Cmd {
