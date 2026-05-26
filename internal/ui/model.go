@@ -38,6 +38,9 @@ type Model struct {
 	afterStop      func() tea.Cmd
 	currentCommand string
 	openedProfile  string
+	externalProc   externalProcess
+	externalLog    string
+	externalOffset int64
 }
 
 type ServerStats struct {
@@ -79,7 +82,7 @@ func NewModel(cfg *config.GlobalConfig, profiles []*config.Profile, statusMsg st
 }
 
 func (m *Model) Init() tea.Cmd {
-	return nil
+	return waitForExternalLog(m)
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -204,6 +207,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.consumeParsedLine(line)
 		m.refreshViewport()
 		return m, waitForLog(m.runner)
+	case externalLogPollMsg:
+		if m.runner.IsRunning() {
+			return m, waitForExternalLog(m)
+		}
+		if msg.proc.PID > 0 {
+			m.externalProc = msg.proc
+		} else {
+			m.externalProc = externalProcess{}
+		}
+		if msg.logPath != m.externalLog {
+			m.externalLog = msg.logPath
+			m.externalOffset = 0
+			m.stats = ServerStats{}
+			m.issues = nil
+			m.logLines = nil
+		}
+		if msg.logPath != "" {
+			m.externalOffset = msg.offset
+		}
+		for _, line := range msg.lines {
+			m.logLines = append(m.logLines, line)
+			if len(m.logLines) > 500 {
+				m.logLines = append([]string(nil), m.logLines[len(m.logLines)-500:]...)
+			}
+			m.consumeParsedLine(line)
+		}
+		if len(msg.lines) > 0 {
+			m.refreshViewport()
+		}
+		return m, waitForExternalLog(m)
 	case runnerDoneMsg:
 		end := time.Now()
 		started := m.runner.StartTime
@@ -326,6 +359,9 @@ func (m *Model) startSelected() error {
 	m.stats = ServerStats{}
 	m.issues = nil
 	m.logLines = nil
+	m.externalProc = externalProcess{}
+	m.externalLog = ""
+	m.externalOffset = 0
 	m.refreshViewport()
 	spec, err := runner.BuildCommand(m.cfg, profile)
 	if err != nil {
@@ -494,6 +530,22 @@ func waitForDone(r *runner.Runner) tea.Cmd {
 		info := <-r.DoneCh
 		return runnerDoneMsg{info: info}
 	}
+}
+
+func waitForExternalLog(m *Model) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		if m.runner != nil && m.runner.IsRunning() {
+			return externalLogPollMsg{}
+		}
+		logsDir := ""
+		if m.cfg != nil {
+			logsDir = m.cfg.LogsDir
+		}
+		return pollExternalLog(os.Getpid(), logsDir, m.externalLog, m.externalOffset)
+	})
 }
 
 func openEditor(editor, path string) tea.Cmd {
