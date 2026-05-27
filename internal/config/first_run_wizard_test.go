@@ -133,3 +133,27 @@ func TestResolveLlamaServerPathRejectsMultipleBinariesInDirectory(t *testing.T) 
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestValidateWizardPathInputUsesDefault(t *testing.T) {
+	got, err := validateWizardPathInput("", "/tmp/default", func(path string) (string, error) {
+		return path, nil
+	})
+	if err != nil {
+		t.Fatalf("validateWizardPathInput failed: %v", err)
+	}
+	if got != "/tmp/default" {
+		t.Fatalf("expected default path, got %s", got)
+	}
+}
+
+func TestValidateWizardPathInputWrapsValidatorErrors(t *testing.T) {
+	_, err := validateWizardPathInput("/tmp/value", "", func(path string) (string, error) {
+		return "", os.ErrNotExist
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "invalid path") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -1,9 +1,7 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -23,22 +21,12 @@ func RunFirstStartWizard(cfg *GlobalConfig) (string, error) {
 		return "Created config at ~/.config/lltop/. Run again in an interactive terminal to finish first-run setup.", nil
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Fprintln(os.Stdout, "Welcome to lltop first-run setup")
-	fmt.Fprintln(os.Stdout, "Press Enter to accept defaults.")
-	fmt.Fprintln(os.Stdout)
-
 	defaultLlama := firstNonEmpty(cfg.LlamaServer, detectLlamaServerPath())
-	llamaPath, err := promptLlamaPath(reader, os.Stdout, "Path to llama-server binary or directory", defaultLlama)
+	llamaPath, modelsDir, err := runFirstRunWizardTUI(defaultLlama, cfg.ModelsDir)
 	if err != nil {
 		return "", err
 	}
 	cfg.LlamaServer = llamaPath
-
-	modelsDir, err := promptPath(reader, os.Stdout, "Path to models directory (optional)", cfg.ModelsDir, optionalDirectory)
-	if err != nil {
-		return "", err
-	}
 	cfg.ModelsDir = modelsDir
 
 	configPath, err := ConfigPath()
@@ -162,63 +150,6 @@ func uniqueProfileSlug(base string, existing map[string]struct{}) string {
 		if _, ok := existing[candidate]; !ok {
 			return candidate
 		}
-	}
-}
-
-func promptPath(reader *bufio.Reader, out io.Writer, label, defaultValue string, validator func(string) error) (string, error) {
-	for {
-		if defaultValue != "" {
-			fmt.Fprintf(out, "%s [%s]: ", label, defaultValue)
-		} else {
-			fmt.Fprintf(out, "%s: ", label)
-		}
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		value := strings.TrimSpace(input)
-		if value == "" {
-			value = defaultValue
-		}
-		expanded, err := ExpandPath(value)
-		if err != nil {
-			fmt.Fprintf(out, "Invalid path: %v\n", err)
-			continue
-		}
-		if err := validator(expanded); err != nil {
-			fmt.Fprintf(out, "Invalid path: %v\n", err)
-			continue
-		}
-		return expanded, nil
-	}
-}
-
-func promptLlamaPath(reader *bufio.Reader, out io.Writer, label, defaultValue string) (string, error) {
-	for {
-		if defaultValue != "" {
-			fmt.Fprintf(out, "%s [%s]: ", label, defaultValue)
-		} else {
-			fmt.Fprintf(out, "%s: ", label)
-		}
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		value := strings.TrimSpace(input)
-		if value == "" {
-			value = defaultValue
-		}
-		expanded, err := ExpandPath(value)
-		if err != nil {
-			fmt.Fprintf(out, "Invalid path: %v\n", err)
-			continue
-		}
-		resolved, err := resolveLlamaServerPath(expanded)
-		if err != nil {
-			fmt.Fprintf(out, "Invalid path: %v\n", err)
-			continue
-		}
-		return resolved, nil
 	}
 }
 
