@@ -1,9 +1,7 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,6 +11,7 @@ import (
 )
 
 const wizardModelSearchDepth = 3
+const llamaServerSearchDepth = 4
 
 func RunFirstStartWizard(cfg *GlobalConfig) (string, error) {
 	if cfg == nil {
@@ -22,22 +21,12 @@ func RunFirstStartWizard(cfg *GlobalConfig) (string, error) {
 		return "Created config at ~/.config/lltop/. Run again in an interactive terminal to finish first-run setup.", nil
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Fprintln(os.Stdout, "Welcome to lltop first-run setup")
-	fmt.Fprintln(os.Stdout, "Press Enter to accept defaults.")
-	fmt.Fprintln(os.Stdout)
-
 	defaultLlama := firstNonEmpty(cfg.LlamaServer, detectLlamaServerPath())
-	llamaPath, err := promptPath(reader, os.Stdout, "Path to llama-server binary", defaultLlama, requireExecutableFile)
+	llamaPath, modelsDir, err := runFirstRunWizardTUI(defaultLlama, cfg.ModelsDir)
 	if err != nil {
 		return "", err
 	}
 	cfg.LlamaServer = llamaPath
-
-	modelsDir, err := promptPath(reader, os.Stdout, "Path to models directory (optional)", cfg.ModelsDir, optionalDirectory)
-	if err != nil {
-		return "", err
-	}
 	cfg.ModelsDir = modelsDir
 
 	configPath, err := ConfigPath()
@@ -164,34 +153,6 @@ func uniqueProfileSlug(base string, existing map[string]struct{}) string {
 	}
 }
 
-func promptPath(reader *bufio.Reader, out io.Writer, label, defaultValue string, validator func(string) error) (string, error) {
-	for {
-		if defaultValue != "" {
-			fmt.Fprintf(out, "%s [%s]: ", label, defaultValue)
-		} else {
-			fmt.Fprintf(out, "%s: ", label)
-		}
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		value := strings.TrimSpace(input)
-		if value == "" {
-			value = defaultValue
-		}
-		expanded, err := ExpandPath(value)
-		if err != nil {
-			fmt.Fprintf(out, "Invalid path: %v\n", err)
-			continue
-		}
-		if err := validator(expanded); err != nil {
-			fmt.Fprintf(out, "Invalid path: %v\n", err)
-			continue
-		}
-		return expanded, nil
-	}
-}
-
 func requireExecutableFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is required")
@@ -207,6 +168,77 @@ func requireExecutableFile(path string) error {
 		return fmt.Errorf("file is not executable")
 	}
 	return nil
+}
+
+func resolveLlamaServerPath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		if err := requireExecutableFile(path); err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+	matches, err := findNamedExecutables(path, "llama-server", llamaServerSearchDepth)
+	if err != nil {
+		return "", err
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no executable llama-server found under %s", path)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("multiple executable llama-server binaries found, use full path: %s", strings.Join(matches, ", "))
+	}
+}
+
+func findNamedExecutables(root, filename string, maxDepth int) ([]string, error) {
+	root = filepath.Clean(root)
+	var matches []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if path != root {
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				return nil
+			}
+			depth := strings.Count(rel, string(filepath.Separator)) + 1
+			if depth > maxDepth {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if d.Name() != filename {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.Mode()&0o111 == 0 {
+			return nil
+		}
+		matches = append(matches, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(matches)
+	return matches, nil
 }
 
 func optionalDirectory(path string) error {
