@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -73,5 +74,62 @@ func TestGenerateProfilesForModelsCreatesUniqueProfileFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(profilesDir, "bar.toml")); err != nil {
 		t.Fatalf("expected bar.toml: %v", err)
+	}
+}
+
+func TestResolveLlamaServerPathAcceptsExecutableFile(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "llama-server")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	got, err := resolveLlamaServerPath(bin)
+	if err != nil {
+		t.Fatalf("resolveLlamaServerPath failed: %v", err)
+	}
+	if got != bin {
+		t.Fatalf("expected %s, got %s", bin, got)
+	}
+}
+
+func TestResolveLlamaServerPathFindsBinaryInDirectory(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "build/bin/llama-server")
+	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	got, err := resolveLlamaServerPath(root)
+	if err != nil {
+		t.Fatalf("resolveLlamaServerPath failed: %v", err)
+	}
+	if got != bin {
+		t.Fatalf("expected %s, got %s", bin, got)
+	}
+}
+
+func TestResolveLlamaServerPathRejectsMultipleBinariesInDirectory(t *testing.T) {
+	root := t.TempDir()
+	binA := filepath.Join(root, "build/bin/llama-server")
+	binB := filepath.Join(root, "other/llama-server")
+	for _, path := range []string{binA, binB} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("write failed: %v", err)
+		}
+	}
+
+	_, err := resolveLlamaServerPath(root)
+	if err == nil {
+		t.Fatal("expected error for multiple binaries")
+	}
+	if !strings.Contains(err.Error(), "multiple executable llama-server binaries found") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
