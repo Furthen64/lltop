@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -162,8 +163,14 @@ func (m firstRunWizardModel) View() string {
 func (m firstRunWizardModel) currentStepText() (string, string) {
 	switch m.step {
 	case 0:
+		if runtime.GOOS == "windows" {
+			return "Path to llama-server binary or directory", `Examples: C:\llama, %LOCALAPPDATA%\llama, C:\llama\llama-server.exe`
+		}
 		return "Path to llama-server binary or directory", "Examples: /usr/local/llama, ~/llama, /usr/bin/llama-server"
 	case 1:
+		if runtime.GOOS == "windows" {
+			return "Path to models directory (optional)", `Leave empty to skip model discovery. Example: C:\Users\you\models`
+		}
 		return "Path to models directory (optional)", "Leave empty to skip model discovery."
 	default:
 		return "Saving first-run setup...", ""
