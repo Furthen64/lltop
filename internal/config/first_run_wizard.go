@@ -19,7 +19,7 @@ func RunFirstStartWizard(cfg *GlobalConfig) (string, error) {
 		return "", fmt.Errorf("config is required")
 	}
 	if !isInteractiveTerminal() {
-		return "Created config at ~/.config/lltop/. Run again in an interactive terminal to finish first-run setup.", nil
+		return "Run again in an interactive terminal to finish first-run setup.", nil
 	}
 
 	defaultLlama := firstNonEmpty(cfg.LlamaServer, detectLlamaServerPath())
@@ -30,11 +30,18 @@ func RunFirstStartWizard(cfg *GlobalConfig) (string, error) {
 	cfg.LlamaServer = llamaPath
 	cfg.ModelsDir = modelsDir
 
+	if err := EnsureDirs(cfg); err != nil {
+		return "", err
+	}
+
 	configPath, err := ConfigPath()
 	if err != nil {
 		return "", err
 	}
 	if err := WriteConfig(configPath, cfg); err != nil {
+		return "", err
+	}
+	if err := ensureStarterProfile(cfg); err != nil {
 		return "", err
 	}
 
@@ -55,6 +62,18 @@ func RunFirstStartWizard(cfg *GlobalConfig) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("Saved first-run setup. Found %d model(s), created %d profile(s).", len(models), created), nil
+}
+
+func ensureStarterProfile(cfg *GlobalConfig) error {
+	starterPath := filepath.Join(cfg.ProfilesDir, "starter.toml")
+	if _, err := os.Stat(starterPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	starter := DefaultProfile(cfg, "starter")
+	starter.Description = "Starter profile"
+	return SaveProfile(starterPath, starter)
 }
 
 func DiscoverModelFiles(root string, maxDepth int) ([]string, error) {
