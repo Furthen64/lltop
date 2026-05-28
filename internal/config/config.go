@@ -161,29 +161,14 @@ func LoadGlobalConfig() (*GlobalConfig, bool, error) {
 	if err := cfg.Normalize(); err != nil {
 		return nil, false, err
 	}
-	if err := EnsureDirs(cfg); err != nil {
-		return nil, false, err
-	}
 
 	configPath, err := ConfigPath()
 	if err != nil {
 		return nil, false, err
 	}
 
-	created := false
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		if err := WriteConfig(configPath, cfg); err != nil {
-			return nil, false, err
-		}
-		starter := DefaultProfile(cfg, "starter")
-		starter.Description = "Starter profile"
-		starterPath := filepath.Join(cfg.ProfilesDir, "starter.toml")
-		if _, err := os.Stat(starterPath); os.IsNotExist(err) {
-			if err := SaveProfile(starterPath, starter); err != nil {
-				return nil, false, err
-			}
-		}
-		created = true
+		return cfg, true, nil
 	} else if err != nil {
 		return nil, false, err
 	}
@@ -197,7 +182,7 @@ func LoadGlobalConfig() (*GlobalConfig, bool, error) {
 	if err := EnsureDirs(cfg); err != nil {
 		return nil, false, err
 	}
-	return cfg, created, nil
+	return cfg, false, nil
 }
 
 func WriteConfig(path string, cfg *GlobalConfig) error {

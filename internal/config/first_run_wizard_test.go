@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,5 +156,20 @@ func TestValidateWizardPathInputWrapsValidatorErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid path") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExecutableNameMatchesWindowsExe(t *testing.T) {
+	if !executableNameMatches("llama-server.exe", "llama-server", "windows", ".EXE;.BAT") {
+		t.Fatal("expected windows executable name to match base name")
+	}
+}
+
+func TestIsExecutableFileWindowsUsesExtension(t *testing.T) {
+	if !isExecutableFile(`C:\llama\llama-server.exe`, fs.FileMode(0o644), "windows", ".EXE;.BAT") {
+		t.Fatal("expected .exe file to be executable on windows")
+	}
+	if isExecutableFile(`C:\llama\llama-server.txt`, fs.FileMode(0o777), "windows", ".EXE;.BAT") {
+		t.Fatal("did not expect .txt file to be executable on windows")
 	}
 }
