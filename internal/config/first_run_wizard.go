@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -164,7 +165,7 @@ func requireExecutableFile(path string) error {
 	if info.IsDir() {
 		return fmt.Errorf("path must point to a file")
 	}
-	if info.Mode()&0o111 == 0 {
+	if !isExecutableFile(path, info.Mode(), runtime.GOOS, os.Getenv("PATHEXT")) {
 		return fmt.Errorf("file is not executable")
 	}
 	return nil
@@ -221,14 +222,14 @@ func findNamedExecutables(root, filename string, maxDepth int) ([]string, error)
 		if d.IsDir() {
 			return nil
 		}
-		if d.Name() != filename {
+		if !executableNameMatches(d.Name(), filename, runtime.GOOS, os.Getenv("PATHEXT")) {
 			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
 			return nil
 		}
-		if info.Mode()&0o111 == 0 {
+		if !isExecutableFile(path, info.Mode(), runtime.GOOS, os.Getenv("PATHEXT")) {
 			return nil
 		}
 		matches = append(matches, path)
@@ -278,4 +279,65 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func executableNameMatches(name, target, goos, pathExt string) bool {
+	if goos != "windows" {
+		return name == target
+	}
+	if strings.EqualFold(name, target) {
+		return true
+	}
+	if filepath.Ext(target) != "" {
+		return false
+	}
+	for _, ext := range executableExtensions(goos, pathExt) {
+		if strings.EqualFold(name, target+ext) {
+			return true
+		}
+	}
+	return false
+}
+
+func isExecutableFile(path string, mode fs.FileMode, goos, pathExt string) bool {
+	if goos != "windows" {
+		return mode&0o111 != 0
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" {
+		return false
+	}
+	for _, allowed := range executableExtensions(goos, pathExt) {
+		if ext == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func executableExtensions(goos, pathExt string) []string {
+	if goos != "windows" {
+		return nil
+	}
+	if strings.TrimSpace(pathExt) == "" {
+		pathExt = ".COM;.EXE;.BAT;.CMD"
+	}
+	raw := strings.Split(pathExt, ";")
+	seen := make(map[string]struct{}, len(raw))
+	exts := make([]string, 0, len(raw))
+	for _, item := range raw {
+		ext := strings.TrimSpace(strings.ToLower(item))
+		if ext == "" {
+			continue
+		}
+		if !strings.HasPrefix(ext, ".") {
+			ext = "." + ext
+		}
+		if _, ok := seen[ext]; ok {
+			continue
+		}
+		seen[ext] = struct{}{}
+		exts = append(exts, ext)
+	}
+	return exts
 }
