@@ -1,1 +1,1 @@
-go build -o bin/lltop ./cmd/lltop
+bin\lltop.exe
