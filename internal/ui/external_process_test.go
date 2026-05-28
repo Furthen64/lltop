@@ -36,3 +36,33 @@ func TestParseExternalLlamaServer_NoMatch(t *testing.T) {
 		t.Fatal("expected no external llama-server match")
 	}
 }
+
+func TestParseExternalLlamaServerTasklist_FindsServer(t *testing.T) {
+	out := "\"llama-server.exe\",\"125756\",\"Console\",\"1\",\"12,345 K\"\r\n"
+	got, ok := parseExternalLlamaServerTasklist(out, 130001)
+	if !ok {
+		t.Fatal("expected external llama-server to be found")
+	}
+	if got.PID != 125756 {
+		t.Fatalf("expected pid 125756, got %d", got.PID)
+	}
+	if got.Command != "llama-server.exe" {
+		t.Fatalf("expected command llama-server.exe, got %q", got.Command)
+	}
+}
+
+func TestParseExternalLlamaServerTasklist_IgnoresSelfPID(t *testing.T) {
+	out := "\"llama-server.exe\",\"130001\",\"Console\",\"1\",\"12,345 K\"\r\n"
+	_, ok := parseExternalLlamaServerTasklist(out, 130001)
+	if ok {
+		t.Fatal("expected self pid process to be ignored")
+	}
+}
+
+func TestParseExternalLlamaServerTasklist_NoMatch(t *testing.T) {
+	out := "INFO: No tasks are running which match the specified criteria.\r\n"
+	_, ok := parseExternalLlamaServerTasklist(out, 130001)
+	if ok {
+		t.Fatal("expected no external llama-server match")
+	}
+}
