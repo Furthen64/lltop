@@ -19,9 +19,7 @@ func (m *Model) View() string {
 		height = 40
 	}
 
-	topH := max(8, int(float64(height)*0.60))
-	statusH := max(6, int(float64(height)*0.25))
-	keysH := max(4, height-topH-statusH)
+	topH, statusH, keysH := layoutHeights(height, m.showHelp)
 	leftW := max(24, int(float64(width)*0.30))
 	rightW := max(40, width-leftW)
 
@@ -134,10 +132,36 @@ func (m *Model) renderStatus() string {
 
 func (m *Model) renderKeys() string {
 	title := titleStyle.Render("keys")
-	if m.showHelp {
-		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  v command  l autoscroll  h/? help  q quit"
+	if !m.showHelp {
+		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  v command  l autoscroll  h/? more help  q quit"
 	}
-	return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  v command  l autoscroll  h/? help  q quit"
+	return strings.Join([]string{
+		title,
+		"",
+		"navigation: Up/Down select profile  Enter launch  q quit",
+		"server: s stop gracefully  S force kill  r restart  l toggle log autoscroll",
+		"profile: e edit selected  n new profile  d duplicate selected  v show command",
+		"help: h/? hide this help",
+	}, "\n")
+}
+
+func layoutHeights(height int, showHelp bool) (topH, statusH, keysH int) {
+	topH = max(8, int(float64(height)*0.60))
+	statusH = max(6, int(float64(height)*0.25))
+	keysH = max(4, height-topH-statusH)
+	if !showHelp || keysH >= 7 {
+		return topH, statusH, keysH
+	}
+
+	deficit := 7 - keysH
+	reduceStatus := min(deficit, statusH-6)
+	statusH -= reduceStatus
+	deficit -= reduceStatus
+
+	reduceTop := min(deficit, topH-8)
+	topH -= reduceTop
+
+	return topH, statusH, height - topH - statusH
 }
 
 func colorizeLogLine(line string) string {

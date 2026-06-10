@@ -90,11 +90,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		topH := max(8, int(float64(m.height)*0.60))
-		rightW := max(40, m.width-max(24, int(float64(m.width)*0.30)))
-		m.logViewport.Width = rightW - 6
-		m.logViewport.Height = topH - 6
-		m.refreshViewport()
+		m.updateLayout()
 		return m, nil
 	case tea.KeyMsg:
 		if m.confirmMode {
@@ -185,6 +181,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("Log auto-scroll = %t", m.logAutoScroll)
 		case "h", "?":
 			m.showHelp = !m.showHelp
+			m.updateLayout()
 		case "q":
 			if m.runner.IsRunning() {
 				m.confirmMode = true
@@ -429,6 +426,22 @@ func (m *Model) refreshViewport() {
 	if m.logAutoScroll {
 		m.logViewport.GotoBottom()
 	}
+}
+
+func (m *Model) updateLayout() {
+	width := m.width
+	if width <= 0 {
+		width = 120
+	}
+	height := m.height
+	if height <= 0 {
+		height = 40
+	}
+	topH, _, _ := layoutHeights(height, m.showHelp)
+	rightW := max(40, width-max(24, int(float64(width)*0.30)))
+	m.logViewport.Width = max(1, rightW-6)
+	m.logViewport.Height = max(1, topH-6)
+	m.refreshViewport()
 }
 
 func (m *Model) reloadProfiles() error {
