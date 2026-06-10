@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Furthen64/lltop/internal/runner"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -112,8 +113,9 @@ func (m *Model) renderStatus() string {
 		b.WriteString(fmt.Sprintf("  uptime: %s", time.Since(m.runner.StartTime).Truncate(time.Second)))
 	}
 	b.WriteByte('\n')
-	if externalCmd != "" {
-		b.WriteString(fmt.Sprintf("external cmd: %s\n", externalCmd))
+	launchText := m.renderedLaunchText(externalCmd)
+	if launchText != "" {
+		b.WriteString(fmt.Sprintf("launch: %s\n", launchText))
 	}
 	b.WriteString(fmt.Sprintf("prompt tok/s: %.2f  eval tok/s: %.2f  offload: %d/%d  progress: %.2f\n",
 		m.stats.PromptTokensPerSec, m.stats.EvalTokensPerSec, m.stats.OffloadedLayers, m.stats.TotalLayers, m.stats.Progress))
@@ -130,17 +132,36 @@ func (m *Model) renderStatus() string {
 	return b.String()
 }
 
+func (m *Model) renderedLaunchText(externalCmd string) string {
+	if m.runner != nil && m.runner.IsRunning() && m.currentCommand != "" {
+		return m.currentCommand
+	}
+	if externalCmd != "" {
+		return externalCmd
+	}
+	profile := m.selectedProfile()
+	if profile == nil {
+		return ""
+	}
+	spec, err := runner.BuildCommand(m.cfg, profile)
+	if err != nil {
+		return ""
+	}
+	return spec.Display
+}
+
 func (m *Model) renderKeys() string {
 	title := titleStyle.Render("keys")
 	if !m.showHelp {
-		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  v command  l autoscroll  h/? more help  q quit"
+		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  v command  c copy command  l autoscroll  h/? more help  q quit"
 	}
 	return strings.Join([]string{
 		title,
 		"",
 		"navigation: Up/Down select profile  Enter launch  q quit",
 		"server: s stop gracefully  S force kill  r restart  l toggle log autoscroll",
-		"profile: e edit selected  n new profile  d duplicate selected  v show command",
+		"log: when autoscroll=false, PgUp/PgDown or Ctrl+U/Ctrl+D scroll; Home/End jump",
+		"profile: e edit selected  n new profile  d duplicate selected  v show command  c copy command",
 		"help: h/? hide this help",
 	}, "\n")
 }
