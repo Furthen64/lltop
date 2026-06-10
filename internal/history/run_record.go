@@ -32,6 +32,7 @@ type RunRecord struct {
 	Parallel               int       `json:"parallel"`
 	Metrics                bool      `json:"metrics"`
 	Jinja                  bool      `json:"jinja"`
+	ChatTemplate           string    `json:"chat_template"`
 	ExtraArgs              []string  `json:"extra_args,omitempty"`
 	GeneratedCommand       string    `json:"generated_command"`
 	LastPromptTokensPerSec float64   `json:"last_prompt_tokens_per_second"`
@@ -104,6 +105,7 @@ func NewRunRecord(cfg *config.GlobalConfig, profile *config.Profile, command str
 		Parallel:               p.Parallel,
 		Metrics:                p.Metrics,
 		Jinja:                  p.Jinja,
+		ChatTemplate:           p.ChatTemplate,
 		ExtraArgs:              append([]string(nil), p.ExtraArgs...),
 		GeneratedCommand:       command,
 		LastPromptTokensPerSec: stats.PromptTokensPerSec,

@@ -18,4 +18,5 @@ parallel = 1
 threads = 0
 jinja = true
 metrics = true
+chat_template = "chatml"
 extra_args = []

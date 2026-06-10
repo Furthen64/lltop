@@ -12,6 +12,7 @@ import (
 	"github.com/Furthen64/lltop/internal/history"
 	"github.com/Furthen64/lltop/internal/parser"
 	"github.com/Furthen64/lltop/internal/runner"
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -112,6 +113,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if m.handleLogScrollKey(msg.String()) {
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -172,6 +177,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.statusMsg = spec.Display
 				}
+			}
+		case "c":
+			text, err := m.currentLaunchText()
+			if err != nil {
+				m.statusMsg = err.Error()
+			} else if err := clipboard.WriteAll(text); err != nil {
+				m.statusMsg = "clipboard failed: " + err.Error()
+			} else {
+				m.statusMsg = "Copied launch command to clipboard."
 			}
 		case "l":
 			m.logAutoScroll = !m.logAutoScroll
@@ -286,6 +300,50 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) handleLogScrollKey(key string) bool {
+	if m.logAutoScroll {
+		return false
+	}
+
+	switch key {
+	case "pgup", "ctrl+u":
+		m.logViewport.HalfPageUp()
+	case "pgdown", "ctrl+d":
+		m.logViewport.HalfPageDown()
+	case "home":
+		m.logViewport.GotoTop()
+	case "end":
+		m.logViewport.GotoBottom()
+	default:
+		return false
+	}
+	m.statusMsg = fmt.Sprintf("Log position %.0f%%", m.logViewport.ScrollPercent()*100)
+	return true
+}
+
+func (m *Model) currentLaunchText() (string, error) {
+	if m.runner != nil && m.runner.IsRunning() && m.currentCommand != "" {
+		return m.currentCommand, nil
+	}
+	if m.externalProc.Command != "" {
+		return m.externalProc.Command, nil
+	}
+	if m.runner == nil || !m.runner.IsRunning() {
+		if proc, err := detectExternalLlamaServer(os.Getpid()); err == nil && proc.Command != "" {
+			return proc.Command, nil
+		}
+	}
+	profile := m.selectedProfile()
+	if profile == nil {
+		return "", fmt.Errorf("no launch command available")
+	}
+	spec, err := runner.BuildCommand(m.cfg, profile)
+	if err != nil {
+		return "", err
+	}
+	return spec.Display, nil
 }
 
 func (m *Model) selectedProfile() *config.Profile {

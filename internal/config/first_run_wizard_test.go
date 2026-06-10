@@ -73,8 +73,17 @@ func TestGenerateProfilesForModelsCreatesUniqueProfileFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(profilesDir, "foo-2.toml")); err != nil {
 		t.Fatalf("expected foo-2.toml: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(profilesDir, "bar.toml")); err != nil {
+	barPath := filepath.Join(profilesDir, "bar.toml")
+	if _, err := os.Stat(barPath); err != nil {
 		t.Fatalf("expected bar.toml: %v", err)
+	}
+
+	data, err := os.ReadFile(barPath)
+	if err != nil {
+		t.Fatalf("failed to read generated profile: %v", err)
+	}
+	if !strings.Contains(string(data), `chat_template = "chatml"`) {
+		t.Fatalf("expected generated profile to include default chat template, got %s", data)
 	}
 }
 

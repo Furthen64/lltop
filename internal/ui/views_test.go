@@ -3,7 +3,21 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	"github.com/Furthen64/lltop/internal/config"
 )
+
+func testGlobalConfig() *config.GlobalConfig {
+	cfg := config.DefaultGlobalConfig()
+	cfg.LlamaServer = "/usr/bin/llama-server"
+	return cfg
+}
+
+func testProfile() *config.Profile {
+	p := config.DefaultProfile(testGlobalConfig(), "qwen")
+	p.Model = "/models/qwen.gguf"
+	return p
+}
 
 func TestRenderKeys_TogglesExpandedHelp(t *testing.T) {
 	m := &Model{}
@@ -42,5 +56,41 @@ func TestLayoutHeights_ExpandsHelpArea(t *testing.T) {
 	}
 	if helpKeysH <= keysH {
 		t.Fatalf("expected help layout to grow keys area, got default=%d help=%d", keysH, helpKeysH)
+	}
+}
+
+func TestRenderStatusShowsLaunchCommand(t *testing.T) {
+	m := NewModel(testGlobalConfig(), nil, "")
+	profile := testProfile()
+	m.profiles = []*config.Profile{profile}
+
+	status := m.renderStatus()
+	if !strings.Contains(status, "launch:") {
+		t.Fatalf("expected current server status to include launch text, got %q", status)
+	}
+	if !strings.Contains(status, "--chat-template chatml") {
+		t.Fatalf("expected launch text to include chat template, got %q", status)
+	}
+}
+
+func TestHandleLogScrollKeyRequiresAutoscrollOff(t *testing.T) {
+	m := NewModel(testGlobalConfig(), nil, "")
+	m.logViewport.Width = 80
+	m.logViewport.Height = 4
+	m.logLines = []string{"one", "two", "three", "four", "five", "six"}
+	m.refreshViewport()
+
+	if m.handleLogScrollKey("pgup") {
+		t.Fatal("expected scroll key to be ignored while autoscroll is enabled")
+	}
+
+	m.logAutoScroll = false
+	m.logViewport.GotoBottom()
+	before := m.logViewport.YOffset
+	if !m.handleLogScrollKey("pgup") {
+		t.Fatal("expected page up to scroll when autoscroll is disabled")
+	}
+	if m.logViewport.YOffset >= before {
+		t.Fatalf("expected viewport to move up from %d, got %d", before, m.logViewport.YOffset)
 	}
 }
