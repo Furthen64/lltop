@@ -32,6 +32,7 @@ type Profile struct {
 	Threads      int      `toml:"threads"`
 	Jinja        bool     `toml:"jinja"`
 	Metrics      bool     `toml:"metrics"`
+	NoMmap       bool     `toml:"no_mmap"`
 	ChatTemplate string   `toml:"chat_template"`
 	ExtraArgs    []string `toml:"extra_args"`
 }
@@ -70,6 +71,7 @@ func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
 		Threads:      0,
 		Jinja:        true,
 		Metrics:      true,
+		NoMmap:       true,
 		ChatTemplate: "chatml",
 		ExtraArgs:    []string{},
 	}
@@ -190,6 +192,7 @@ func SaveProfile(path string, p *Profile) error {
 	fmt.Fprintf(&b, "threads = %d\n", p.Threads)
 	fmt.Fprintf(&b, "jinja = %t\n", p.Jinja)
 	fmt.Fprintf(&b, "metrics = %t\n", p.Metrics)
+	fmt.Fprintf(&b, "no_mmap = %t\n", p.NoMmap)
 	fmt.Fprintf(&b, "chat_template = %q\n", p.ChatTemplate)
 	b.WriteString("extra_args = [")
 	for i, arg := range p.ExtraArgs {

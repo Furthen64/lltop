@@ -17,6 +17,7 @@ type ScenarioKey struct {
 	Batch       int
 	UBatch      int
 	Parallel    int
+	NoMmap      bool
 	ExtraArgs   string
 }
 
@@ -31,6 +32,7 @@ func BuildScenarioKey(p *config.Profile) ScenarioKey {
 		Batch:       p.Batch,
 		UBatch:      p.UBatch,
 		Parallel:    p.Parallel,
+		NoMmap:      p.NoMmap,
 		ExtraArgs:   strings.Join(p.ExtraArgs, "\x00"),
 	}
 }
@@ -72,5 +74,6 @@ func matchesScenario(record *RunRecord, key ScenarioKey) bool {
 		record.Batch == key.Batch &&
 		record.UBatch == key.UBatch &&
 		record.Parallel == key.Parallel &&
+		record.NoMmap == key.NoMmap &&
 		strings.Join(record.ExtraArgs, "\x00") == key.ExtraArgs
 }

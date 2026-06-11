@@ -61,6 +61,9 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 	if p.Jinja {
 		args = append(args, "--jinja")
 	}
+	if p.NoMmap {
+		args = append(args, "--no-mmap")
+	}
 	if p.ChatTemplate != "" {
 		args = append(args, "--chat-template", p.ChatTemplate)
 	}
