@@ -193,6 +193,7 @@ threads = 0
 
 jinja = true
 metrics = true
+no_mmap = true
 
 extra_args = []
 ```
@@ -207,6 +208,7 @@ cache_k = "q4_0"
 cache_v = "q4_0"
 ctx = 65536
 parallel = 1
+no_mmap = true
 ```
 
 If `threads = 0`, omit the `--threads` argument.
@@ -235,7 +237,8 @@ The profile above should generate a command roughly like:
   -ub 256 \
   --parallel 1 \
   --metrics \
-  --jinja
+  --jinja \
+  --no-mmap
 ```
 
 The generated command should be visible in the UI before launch or in a details panel.
@@ -612,6 +615,7 @@ Scenario identity should include:
 - batch
 - ubatch
 - parallel
+- no_mmap
 - extra_args
 
 If a matching scenario failed within `recent_failure_window_seconds`, show a confirmation:
@@ -726,6 +730,7 @@ Fields:
 - parallel
 - jinja
 - metrics
+- no_mmap
 - extra_args
 
 Built-in editor can be v0.2 if external editor works well.
