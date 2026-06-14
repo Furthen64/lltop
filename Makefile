@@ -19,6 +19,7 @@ build:
 
 clean:
 	rm -rf bin/
+	rm -r ~/.config/lltop
 
 run: build
 	./bin/lltop
