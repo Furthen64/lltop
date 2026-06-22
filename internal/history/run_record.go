@@ -9,6 +9,8 @@ import (
 type RunRecord struct {
 	RunID                  string    `json:"run_id"`
 	ProfileName            string    `json:"profile_name"`
+	BenchmarkLabel         string    `json:"benchmark_label,omitempty"`
+	Notes                  string    `json:"notes,omitempty"`
 	StartedAt              time.Time `json:"started_at"`
 	EndedAt                time.Time `json:"ended_at"`
 	DurationSeconds        float64   `json:"duration_seconds"`

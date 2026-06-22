@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Furthen64/lltop/internal/config"
+	"github.com/Furthen64/lltop/internal/history"
 )
 
 func testGlobalConfig() *config.GlobalConfig {
@@ -38,6 +39,7 @@ func TestRenderKeys_TogglesExpandedHelp(t *testing.T) {
 		"navigation:",
 		"server:",
 		"profile:",
+		"annotate latest run",
 		"help: h/? hide this help",
 	} {
 		if !strings.Contains(expanded, want) {
@@ -72,6 +74,41 @@ func TestRenderStatusShowsLaunchCommand(t *testing.T) {
 	}
 	if !strings.Contains(status, "--chat-template chatml") {
 		t.Fatalf("expected launch text to include chat template, got %q", status)
+	}
+}
+
+func TestRenderStatusShowsHistorySummary(t *testing.T) {
+	m := NewModel(testGlobalConfig(), nil, "")
+	profile := testProfile()
+	m.profiles = []*config.Profile{profile}
+	m.historySummary = history.ProfileSummary{
+		ProfileName: profile.Name,
+		RunCount:    3,
+		GenerationSpeed: history.MetricSummary{
+			Count:   3,
+			Latest:  4,
+			Average: 5,
+			Median:  4.5,
+			Min:     3,
+			Max:     8,
+			Series:  []float64{3, 8, 4},
+		},
+		PromptSpeed: history.MetricSummary{
+			Count:   2,
+			Latest:  100,
+			Average: 95,
+			Median:  95,
+			Min:     90,
+			Max:     100,
+			Series:  []float64{90, 100},
+		},
+	}
+
+	status := m.renderStatus()
+	for _, want := range []string{"history: 3 run(s)", "gen tok/s latest 4.00", "ingest tok/s latest 100.00"} {
+		if !strings.Contains(status, want) {
+			t.Fatalf("expected status to contain %q, got %q", want, status)
+		}
 	}
 }
 

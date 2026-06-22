@@ -112,6 +112,7 @@ r            Restart
 e            Edit selected profile
 n            Create new profile
 d            Duplicate selected profile
+a            Annotate latest run for selected profile
 v            Show generated command
 c            Copy generated command
 l            Toggle log autoscroll
@@ -222,7 +223,12 @@ Each completed run writes:
 - a JSON run record under `~/.config/lltop/runs`
 
 Run records include profile details, resolved command, timestamps, exit code,
-final observed throughput and GPU stats, and parsed issues from the logs.
+final observed throughput and GPU stats, parsed issues from the logs, and
+optional notes/annotations for the selected run.
+
+The status panel also summarizes per-profile history from those run records,
+including latest, average, median, range, and a small sparkline for ingestion
+and generation throughput.
 
 The recent-failure check compares the selected profile against recent failed
 startup scenarios. If the same scenario failed within the configured window,

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Furthen64/lltop/internal/history"
 	"github.com/Furthen64/lltop/internal/runner"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -151,6 +152,7 @@ func (m *Model) renderStatus() string {
 	if m.stats.ChatFormat != "" {
 		b.WriteString(fmt.Sprintf("chat format: %s  ctx slot: %d\n", m.stats.ChatFormat, m.stats.CtxSlotSize))
 	}
+	b.WriteString(renderHistorySummary(m.historySummary))
 	if m.stats.LastError != "" {
 		b.WriteString(errStyle.Render("last error: " + m.stats.LastError))
 		b.WriteByte('\n')
@@ -182,7 +184,7 @@ func (m *Model) renderedLaunchText(externalCmd string) string {
 func (m *Model) renderKeys() string {
 	title := titleStyle.Render("keys")
 	if !m.showHelp {
-		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  v command  c copy command  l autoscroll  h/? more help  q quit"
+		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  a annotate run  v command  c copy command  l autoscroll  h/? more help  q quit"
 	}
 	return strings.Join([]string{
 		title,
@@ -190,9 +192,40 @@ func (m *Model) renderKeys() string {
 		"navigation: Up/Down select profile  Enter launch  q quit",
 		"server: s stop gracefully  S force kill  r restart  l toggle log autoscroll",
 		"log: when autoscroll=false, PgUp/PgDown or Ctrl+U/Ctrl+D scroll; Home/End jump",
-		"profile: e edit selected  n new profile  d duplicate selected  v show command  c copy command",
+		"profile: e edit selected  n new profile  d duplicate selected  a annotate latest run  v show command  c copy command",
 		"help: h/? hide this help",
 	}, "\n")
+}
+
+func renderHistorySummary(summary history.ProfileSummary) string {
+	if summary.ProfileName == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("history: %d run(s)\n", summary.RunCount))
+	if summary.GenerationSpeed.Count > 0 {
+		b.WriteString(fmt.Sprintf(
+			"gen tok/s latest %.2f  avg %.2f  median %.2f  range %.2f..%.2f  %s\n",
+			summary.GenerationSpeed.Latest,
+			summary.GenerationSpeed.Average,
+			summary.GenerationSpeed.Median,
+			summary.GenerationSpeed.Min,
+			summary.GenerationSpeed.Max,
+			history.Sparkline(summary.GenerationSpeed.Series),
+		))
+	}
+	if summary.PromptSpeed.Count > 0 {
+		b.WriteString(fmt.Sprintf(
+			"ingest tok/s latest %.2f  avg %.2f  median %.2f  range %.2f..%.2f  %s\n",
+			summary.PromptSpeed.Latest,
+			summary.PromptSpeed.Average,
+			summary.PromptSpeed.Median,
+			summary.PromptSpeed.Min,
+			summary.PromptSpeed.Max,
+			history.Sparkline(summary.PromptSpeed.Series),
+		))
+	}
+	return b.String()
 }
 
 func layoutHeights(height int, showHelp bool) (topH, statusH, keysH int) {

@@ -18,20 +18,21 @@ import (
 )
 
 type Model struct {
-	cfg           *config.GlobalConfig
-	profiles      []*config.Profile
-	selectedIdx   int
-	runner        *runner.Runner
-	logViewport   viewport.Model
-	stats         ServerStats
-	width         int
-	height        int
-	showHelp      bool
-	confirmMode   bool
-	confirmPrompt string
-	confirmAction func()
-	statusMsg     string
-	logAutoScroll bool
+	cfg            *config.GlobalConfig
+	profiles       []*config.Profile
+	selectedIdx    int
+	runner         *runner.Runner
+	logViewport    viewport.Model
+	stats          ServerStats
+	width          int
+	height         int
+	showHelp       bool
+	confirmMode    bool
+	confirmPrompt  string
+	confirmAction  func()
+	statusMsg      string
+	logAutoScroll  bool
+	historySummary history.ProfileSummary
 
 	logLines       []string
 	issues         []history.Issue
@@ -39,6 +40,9 @@ type Model struct {
 	afterStop      func() tea.Cmd
 	currentCommand string
 	openedProfile  string
+	editorMode     string
+	annotationPath string
+	annotationRun  string
 	externalProc   externalProcess
 	externalLog    string
 	externalOffset int64
@@ -79,6 +83,7 @@ func NewModel(cfg *config.GlobalConfig, profiles []*config.Profile, statusMsg st
 		logLines:      []string{},
 		issues:        []history.Issue{},
 	}
+	m.refreshHistorySummary()
 	return m
 }
 
@@ -124,10 +129,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selectedIdx > 0 {
 				m.selectedIdx--
 			}
+			m.refreshHistorySummary()
 		case "down":
 			if m.selectedIdx < len(m.profiles)-1 {
 				m.selectedIdx++
 			}
+			m.refreshHistorySummary()
 		case "enter":
 			return m, m.launchSelectedCmd(false)
 		case "s":
@@ -187,6 +194,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.statusMsg = "Copied launch command to clipboard."
 			}
+		case "a":
+			return m, m.annotateSelectedRunCmd()
 		case "l":
 			m.logAutoScroll = !m.logAutoScroll
 			if m.logAutoScroll {
@@ -274,6 +283,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, err := history.SaveRunRecord(m.cfg.RunsDir, record); err != nil {
 				m.statusMsg = "failed to store run record: " + err.Error()
 			} else {
+				m.refreshHistorySummary()
 				m.statusMsg = fmt.Sprintf("Run ended with exit code %d.", msg.info.ExitCode)
 			}
 		}
@@ -287,8 +297,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case editorDoneMsg:
+		defer m.clearEditorState()
 		if msg.err != nil {
 			m.statusMsg = "editor failed: " + msg.err.Error()
+			return m, nil
+		}
+		if m.editorMode == "annotate" {
+			if err := m.saveEditedAnnotation(); err != nil {
+				m.statusMsg = err.Error()
+			} else {
+				m.refreshHistorySummary()
+				m.statusMsg = "Saved run note."
+			}
 			return m, nil
 		}
 		if err := m.reloadProfiles(); err != nil {
@@ -515,12 +535,14 @@ func (m *Model) reloadProfiles() error {
 	for i, profile := range m.profiles {
 		if profile.Name == m.openedProfile {
 			m.selectedIdx = i
+			m.refreshHistorySummary()
 			return nil
 		}
 	}
 	if m.selectedIdx >= len(m.profiles) {
 		m.selectedIdx = len(m.profiles) - 1
 	}
+	m.refreshHistorySummary()
 	return nil
 }
 
@@ -578,6 +600,95 @@ func (m *Model) duplicateSelected() error {
 	}
 	m.openedProfile = dup.Name
 	return m.reloadProfiles()
+}
+
+func (m *Model) annotateSelectedRunCmd() tea.Cmd {
+	profile := m.selectedProfile()
+	if profile == nil {
+		m.statusMsg = "No profile selected."
+		return nil
+	}
+	path, record, err := history.FindLatestRunRecordForProfile(m.cfg.RunsDir, profile.Name)
+	if err != nil {
+		m.statusMsg = err.Error()
+		return nil
+	}
+	tmp, err := os.CreateTemp("", "lltop-note-*.md")
+	if err != nil {
+		m.statusMsg = err.Error()
+		return nil
+	}
+	body := record.Notes
+	if body == "" {
+		body = annotationTemplate(profile.Name, record)
+	}
+	if _, err := tmp.WriteString(body); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		m.statusMsg = err.Error()
+		return nil
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		m.statusMsg = err.Error()
+		return nil
+	}
+	m.editorMode = "annotate"
+	m.annotationPath = tmp.Name()
+	m.annotationRun = path
+	return openEditor(m.cfg.Editor, tmp.Name())
+}
+
+func (m *Model) saveEditedAnnotation() error {
+	if m.annotationPath == "" || m.annotationRun == "" {
+		return fmt.Errorf("annotation editor state missing")
+	}
+	data, err := os.ReadFile(m.annotationPath)
+	if err != nil {
+		return err
+	}
+	record, err := history.LoadRunRecord(m.annotationRun)
+	if err != nil {
+		return err
+	}
+	record.Notes = strings.TrimSpace(string(data))
+	return history.UpdateRunRecord(m.annotationRun, record)
+}
+
+func (m *Model) clearEditorState() {
+	if m.annotationPath != "" {
+		_ = os.Remove(m.annotationPath)
+	}
+	m.editorMode = ""
+	m.annotationPath = ""
+	m.annotationRun = ""
+}
+
+func (m *Model) refreshHistorySummary() {
+	profile := m.selectedProfile()
+	if profile == nil || m.cfg == nil {
+		m.historySummary = history.ProfileSummary{}
+		return
+	}
+	records, err := history.LoadRunRecords(m.cfg.RunsDir)
+	if err != nil {
+		m.historySummary = history.ProfileSummary{ProfileName: profile.Name}
+		return
+	}
+	m.historySummary = history.SummarizeProfileRuns(records, profile.Name)
+}
+
+func annotationTemplate(profileName string, record *history.RunRecord) string {
+	if record == nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"profile: %s\nrun_id: %s\ngeneration tok/s: %.2f\nprompt tok/s: %.2f\n\nnotes:\n",
+		profileName,
+		record.RunID,
+		record.LastEvalTokensPerSec,
+		record.LastPromptTokensPerSec,
+	)
 }
 
 func waitForLog(r *runner.Runner) tea.Cmd {
