@@ -48,6 +48,9 @@ func (m *Model) renderProfiles() string {
 	}
 	for i, profile := range m.profiles {
 		line := profile.Name
+		if size := modelFileSizeText(profile.Model); size != "" {
+			line += dimStyle.Render("  " + size)
+		}
 		if profile.Description != "" {
 			line += dimStyle.Render(" — " + profile.Description)
 		}
@@ -61,6 +64,32 @@ func (m *Model) renderProfiles() string {
 		}
 	}
 	return b.String()
+}
+
+func modelFileSizeText(path string) string {
+	if path == "" {
+		return ""
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return formatFileSize(info.Size())
+}
+
+func formatFileSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	value := float64(size)
+	for _, unit := range units {
+		value /= 1024
+		if value < 1024 {
+			return fmt.Sprintf("%.1f %s", value, unit)
+		}
+	}
+	return fmt.Sprintf("%.1f PiB", value/1024)
 }
 
 func (m *Model) renderLogs() string {

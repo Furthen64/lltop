@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -70,6 +72,47 @@ func TestRenderStatusShowsLaunchCommand(t *testing.T) {
 	}
 	if !strings.Contains(status, "--chat-template chatml") {
 		t.Fatalf("expected launch text to include chat template, got %q", status)
+	}
+}
+
+func TestRenderProfilesShowsModelFileSize(t *testing.T) {
+	modelPath := filepath.Join(t.TempDir(), "qwen.gguf")
+	file, err := os.Create(modelPath)
+	if err != nil {
+		t.Fatalf("failed to create model file: %v", err)
+	}
+	if err := file.Truncate(1536); err != nil {
+		t.Fatalf("failed to size model file: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("failed to close model file: %v", err)
+	}
+
+	m := NewModel(testGlobalConfig(), nil, "")
+	profile := testProfile()
+	profile.Model = modelPath
+	m.profiles = []*config.Profile{profile}
+
+	profiles := m.renderProfiles()
+	if !strings.Contains(profiles, "1.5 KiB") {
+		t.Fatalf("expected profile list to include model file size, got %q", profiles)
+	}
+}
+
+func TestFormatFileSize(t *testing.T) {
+	tests := map[int64]string{
+		512:     "512 B",
+		1536:    "1.5 KiB",
+		5 << 20: "5.0 MiB",
+		7 << 30: "7.0 GiB",
+		3 << 40: "3.0 TiB",
+		5 << 50: "5.0 PiB",
+	}
+
+	for size, want := range tests {
+		if got := formatFileSize(size); got != want {
+			t.Fatalf("formatFileSize(%d) = %q, want %q", size, got, want)
+		}
 	}
 }
 
