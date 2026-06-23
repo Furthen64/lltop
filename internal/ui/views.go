@@ -21,7 +21,8 @@ func (m *Model) View() string {
 		height = 40
 	}
 
-	topH, statusH, keysH := layoutHeights(height, m.showHelp)
+	statusBar := m.renderStatusBar(width)
+	topH, statusH, keysH := layoutHeights(height-1, m.showHelp)
 	leftW := max(24, int(float64(width)*0.30))
 	rightW := max(40, width-leftW)
 
@@ -36,7 +37,7 @@ func (m *Model) View() string {
 	}
 	bottom := panelStyle.Width(width - 2).Height(keysH - 2).Render(bottomContent)
 
-	return lipgloss.JoinVertical(lipgloss.Left, top, status, bottom)
+	return lipgloss.JoinVertical(lipgloss.Left, statusBar, top, status, bottom)
 }
 
 func (m *Model) renderProfiles() string {
@@ -187,6 +188,45 @@ func (m *Model) renderedLaunchText(externalCmd string) string {
 		return ""
 	}
 	return spec.Display
+}
+
+func (m *Model) renderStatusBar(width int) string {
+	runnerActive := m.runner != nil && m.runner.IsRunning()
+
+	var statusTag, statusInfo string
+	var tagStyle lipgloss.Style
+
+	if runnerActive {
+		tagStyle = runningStyle
+		statusTag = " RUNNING "
+		statusInfo = fmt.Sprintf("profile: %s  pid: %d", m.runner.Profile.Name, m.runner.PID)
+		if !m.runner.StartTime.IsZero() {
+			statusInfo += fmt.Sprintf("  uptime: %s", time.Since(m.runner.StartTime).Truncate(time.Second))
+		}
+	} else {
+		extPID := m.externalProc.PID
+		if extPID == 0 {
+			if proc, err := detectExternalLlamaServer(os.Getpid()); err == nil && proc.PID > 0 {
+				extPID = proc.PID
+			}
+		}
+		if extPID > 0 {
+			tagStyle = externalStyle
+			statusTag = " EXTERNAL "
+			statusInfo = fmt.Sprintf("pid: %d", extPID)
+		} else {
+			tagStyle = idleStyle
+			statusTag = "  IDLE  "
+		}
+	}
+
+	tag := tagStyle.Render(statusTag)
+	padding := width - lipgloss.Width(tag) - lipgloss.Width(statusInfo) - 4
+	if padding < 1 {
+		padding = 1
+	}
+	fill := strings.Repeat(" ", padding)
+	return statusBarStyle.Render(tag + fill + statusInfo)
 }
 
 func (m *Model) renderKeys() string {
