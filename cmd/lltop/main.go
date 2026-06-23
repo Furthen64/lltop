@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -22,11 +23,13 @@ func main() {
 	var showCommand string
 	var validateName string
 	var runName string
+	var refreshModels bool
 
 	flag.BoolVar(&listProfiles, "list-profiles", false, "list profile names and exit")
 	flag.StringVar(&showCommand, "show-command", "", "print generated command for a profile")
 	flag.StringVar(&validateName, "validate", "", "validate a profile")
 	flag.StringVar(&runName, "run", "", "run a profile headlessly")
+	flag.BoolVar(&refreshModels, "refresh-models", false, "scan for new models and optionally create profiles")
 	flag.Parse()
 
 	cfg, created, err := config.LoadGlobalConfig()
@@ -75,6 +78,75 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 		}
 		os.Exit(exitCode)
+	case refreshModels:
+		if cfg.ModelsDir == "" {
+			fatal(fmt.Errorf("models_dir is not set in config; cannot scan for models"))
+		}
+		models, err := config.DiscoverModelFiles(cfg.ModelsDir, 3)
+		if err != nil {
+			fatal(err)
+		}
+		if len(models) == 0 {
+			fmt.Println("No model files found.")
+			return
+		}
+
+		existingModelPaths := map[string]bool{}
+		for _, p := range profiles {
+			if p.Model != "" {
+				existingModelPaths[p.Model] = true
+			}
+		}
+
+		var newModels []string
+		for _, m := range models {
+			if !existingModelPaths[m] {
+				newModels = append(newModels, m)
+			}
+		}
+
+		if len(newModels) == 0 {
+			fmt.Println("No new models found. All discovered models already have profiles.")
+			return
+		}
+
+		existingSlugs := map[string]struct{}{}
+		for _, p := range profiles {
+			existingSlugs[p.Name] = struct{}{}
+		}
+
+		created := 0
+		for _, m := range newModels {
+			baseName := strings.TrimSuffix(filepath.Base(m), filepath.Ext(m))
+			slug := config.UniqueProfileSlug(config.SlugifyName(baseName), existingSlugs)
+			existingSlugs[slug] = struct{}{}
+
+			fmt.Printf("Found new model: %s\n", m)
+			fmt.Printf("Create standard profile %q? [Y/n] ", slug)
+
+			var response string
+			_, scanErr := fmt.Scanln(&response)
+			if scanErr == nil {
+				response = strings.TrimSpace(strings.ToLower(response))
+			}
+			if response == "n" || response == "no" {
+				fmt.Println("  -> Skipped")
+				continue
+			}
+
+			profile := config.DefaultProfile(cfg, slug)
+			profile.Description = "Auto-generated from refresh"
+			profile.Model = m
+			profilePath := filepath.Join(cfg.ProfilesDir, slug+".toml")
+			if err := config.SaveProfile(profilePath, profile); err != nil {
+				fmt.Fprintf(os.Stderr, "error creating profile for %s: %v\n", m, err)
+				continue
+			}
+			fmt.Printf("  -> Created profile %q\n", slug)
+			created++
+		}
+		fmt.Printf("Created %d new profile(s).\n", created)
+		return
 	default:
 		program := tea.NewProgram(ui.NewModel(cfg, profiles, status), tea.WithAltScreen())
 		if _, err := program.Run(); err != nil {

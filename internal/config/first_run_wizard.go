@@ -141,7 +141,7 @@ func GenerateProfilesForModels(cfg *GlobalConfig, models []string) (int, error) 
 	created := 0
 	for _, modelPath := range models {
 		baseName := strings.TrimSuffix(filepath.Base(modelPath), filepath.Ext(modelPath))
-		slug := uniqueProfileSlug(SlugifyName(baseName), existing)
+		slug := UniqueProfileSlug(SlugifyName(baseName), existing)
 		existing[slug] = struct{}{}
 		profilePath := filepath.Join(cfg.ProfilesDir, slug+".toml")
 		if _, err := os.Stat(profilePath); err == nil {
@@ -161,7 +161,7 @@ func GenerateProfilesForModels(cfg *GlobalConfig, models []string) (int, error) 
 	return created, nil
 }
 
-func uniqueProfileSlug(base string, existing map[string]struct{}) string {
+func UniqueProfileSlug(base string, existing map[string]struct{}) string {
 	if _, ok := existing[base]; !ok {
 		return base
 	}

@@ -58,7 +58,7 @@ func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
 		Port:         port,
 		Alias:        "",
 		Ctx:          65536,
-		NGL:          0,
+		NGL:          99,
 		CacheK:       "q4_0",
 		CacheV:       "q4_0",
 		Temp:         0.1,
