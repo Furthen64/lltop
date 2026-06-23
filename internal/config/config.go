@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -41,11 +42,18 @@ func ConfigPath() (string, error) {
 	return filepath.Join(root, "config.toml"), nil
 }
 
+func defaultEditor() string {
+	if runtime.GOOS == "windows" {
+		return "notepad"
+	}
+	return "nano"
+}
+
 func DefaultGlobalConfig() *GlobalConfig {
 	root, _ := AppDir()
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		editor = "nano"
+		editor = defaultEditor()
 	}
 
 	return &GlobalConfig{
