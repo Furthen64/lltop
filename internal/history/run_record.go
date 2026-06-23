@@ -32,6 +32,7 @@ type RunRecord struct {
 	Batch                  int       `json:"batch"`
 	UBatch                 int       `json:"ubatch"`
 	Parallel               int       `json:"parallel"`
+	Threads                int       `json:"threads"`
 	Metrics                bool      `json:"metrics"`
 	Jinja                  bool      `json:"jinja"`
 	NoMmap                 bool      `json:"no_mmap"`
@@ -106,6 +107,7 @@ func NewRunRecord(cfg *config.GlobalConfig, profile *config.Profile, command str
 		Batch:                  p.Batch,
 		UBatch:                 p.UBatch,
 		Parallel:               p.Parallel,
+		Threads:                p.Threads,
 		Metrics:                p.Metrics,
 		Jinja:                  p.Jinja,
 		NoMmap:                 p.NoMmap,

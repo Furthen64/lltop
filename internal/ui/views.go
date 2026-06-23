@@ -20,6 +20,9 @@ func (m *Model) View() string {
 	if height <= 0 {
 		height = 40
 	}
+	if m.viewMode == notesView {
+		return m.renderNotesView(width, height)
+	}
 
 	statusBar := m.renderStatusBar(width)
 	topH, statusH, keysH := layoutHeights(height-1, m.showHelp)
@@ -31,6 +34,26 @@ func (m *Model) View() string {
 	top := lipgloss.JoinHorizontal(lipgloss.Top, profilesPanel, logsPanel)
 
 	status := panelStyle.Width(width - 2).Height(statusH - 2).Render(m.renderStatus())
+	bottomContent := m.renderKeys()
+	if m.confirmMode {
+		bottomContent = titleStyle.Render("confirm") + "\n\n" + m.confirmPrompt
+	}
+	bottom := panelStyle.Width(width - 2).Height(keysH - 2).Render(bottomContent)
+
+	return lipgloss.JoinVertical(lipgloss.Left, statusBar, top, status, bottom)
+}
+
+func (m *Model) renderNotesView(width, height int) string {
+	statusBar := m.renderStatusBar(width)
+	topH, statusH, keysH := layoutHeights(height-1, m.showHelp)
+	leftW := max(28, int(float64(width)*0.35))
+	rightW := max(40, width-leftW)
+
+	runsPanel := panelStyle.Width(leftW - 2).Height(topH - 2).Render(m.renderNoteRuns())
+	notePanel := panelStyle.Width(rightW - 2).Height(topH - 2).Render(m.renderNoteContent())
+	top := lipgloss.JoinHorizontal(lipgloss.Top, runsPanel, notePanel)
+
+	status := panelStyle.Width(width - 2).Height(statusH - 2).Render(m.renderNoteStatus())
 	bottomContent := m.renderKeys()
 	if m.confirmMode {
 		bottomContent = titleStyle.Render("confirm") + "\n\n" + m.confirmPrompt
@@ -110,6 +133,45 @@ func (m *Model) renderLogs() string {
 	return header + "\n\n" + m.logViewport.View()
 }
 
+func (m *Model) renderNoteRuns() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("notes"))
+	b.WriteString("\n\n")
+	if len(m.noteEntries) == 0 {
+		b.WriteString(dimStyle.Render("No runs recorded for this profile."))
+		return b.String()
+	}
+	for i, entry := range m.noteEntries {
+		record := entry.Record
+		if record == nil {
+			continue
+		}
+		stamp := record.StartedAt.Local().Format("2006-01-02 15:04")
+		noteMark := " "
+		if strings.TrimSpace(record.Notes) != "" {
+			noteMark = "*"
+		}
+		line := fmt.Sprintf("%s %s  exit:%d  gen:%.2f", noteMark, stamp, record.ExitCode, record.LastEvalTokensPerSec)
+		if i == m.noteSelectedIdx {
+			b.WriteString(selectedStyle.Render(line))
+		} else {
+			b.WriteString(line)
+		}
+		if i < len(m.noteEntries)-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
+func (m *Model) renderNoteContent() string {
+	header := titleStyle.Render("selected note")
+	if ref := m.selectedNoteRef(); ref != nil && ref.Record != nil {
+		header += " " + dimStyle.Render(ref.Record.RunID)
+	}
+	return header + "\n\n" + m.noteViewport.View()
+}
+
 func (m *Model) renderStatus() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("current server"))
@@ -167,6 +229,42 @@ func (m *Model) renderStatus() string {
 		b.WriteByte('\n')
 	}
 	if m.statusMsg != "" {
+		b.WriteString(infoStyle.Render(m.statusMsg))
+	}
+	return b.String()
+}
+
+func (m *Model) renderNoteStatus() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("note details"))
+	b.WriteString("\n\n")
+
+	profile := m.selectedProfile()
+	if profile != nil {
+		b.WriteString(fmt.Sprintf("profile: %s\n", profile.Name))
+	}
+	b.WriteString(fmt.Sprintf("runs: %d\n", len(m.noteEntries)))
+
+	ref := m.selectedNoteRef()
+	if ref == nil || ref.Record == nil {
+		if m.statusMsg != "" {
+			b.WriteString("\n")
+			b.WriteString(infoStyle.Render(m.statusMsg))
+		}
+		return b.String()
+	}
+	record := ref.Record
+	b.WriteString(fmt.Sprintf("run_id: %s\n", record.RunID))
+	b.WriteString(fmt.Sprintf("started: %s\n", record.StartedAt.Local().Format(time.RFC3339)))
+	b.WriteString(fmt.Sprintf("duration: %.2fs  exit: %d\n", record.DurationSeconds, record.ExitCode))
+	b.WriteString(fmt.Sprintf("prompt tok/s: %.2f  eval tok/s: %.2f\n", record.LastPromptTokensPerSec, record.LastEvalTokensPerSec))
+	if strings.TrimSpace(record.Notes) == "" {
+		b.WriteString(dimStyle.Render("note: empty"))
+	} else {
+		b.WriteString(okStyle.Render("note: saved"))
+	}
+	if m.statusMsg != "" {
+		b.WriteString("\n")
 		b.WriteString(infoStyle.Render(m.statusMsg))
 	}
 	return b.String()
@@ -231,8 +329,21 @@ func (m *Model) renderStatusBar(width int) string {
 
 func (m *Model) renderKeys() string {
 	title := titleStyle.Render("keys")
+	if m.viewMode == notesView {
+		if !m.showHelp {
+			return title + "\n\nUp/Down select run  PgUp/PgDown scroll note  Home/End jump  a annotate run  N/Esc back to main  h/? more help"
+		}
+		return strings.Join([]string{
+			title,
+			"",
+			fmt.Sprintf("%-12s %s", "navigation:", "Up/Down select run  N or Esc return to main view"),
+			fmt.Sprintf("%-12s %s", "note:", "PgUp/PgDown or Ctrl+U/Ctrl+D scroll  Home/End jump"),
+			fmt.Sprintf("%-12s %s", "edit:", "a annotate selected run"),
+			fmt.Sprintf("%-12s %s", "help:", "h/? hide this help  q return to main"),
+		}, "\n")
+	}
 	if !m.showHelp {
-		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  a annotate run  v command  c copy command  l autoscroll  h/? more help  q quit"
+		return title + "\n\nUp/Down move  Enter launch  s stop  S kill  r restart  e edit  n new  d duplicate  a annotate run  N notes view  v command  c copy command  l autoscroll  h/? more help  q quit"
 	}
 	return strings.Join([]string{
 		title,
@@ -240,7 +351,7 @@ func (m *Model) renderKeys() string {
 		fmt.Sprintf("%-12s %s", "navigation:", "Up/Down select profile  Enter launch  q quit"),
 		fmt.Sprintf("%-12s %s", "server:", "s stop gracefully  S force kill  r restart  l toggle log autoscroll"),
 		fmt.Sprintf("%-12s %s", "log:", "when autoscroll=false, PgUp/PgDown or Ctrl+U/Ctrl+D scroll; Home/End jump"),
-		fmt.Sprintf("%-12s %s", "profile:", "e edit selected  n new profile  d duplicate selected  a annotate latest run  v show command  c copy command"),
+		fmt.Sprintf("%-12s %s", "profile:", "e edit selected  n new profile  d duplicate selected  a annotate latest run  N note view  v show command  c copy command"),
 		fmt.Sprintf("%-12s %s", "help:", "h/? hide this help"),
 	}, "\n")
 }

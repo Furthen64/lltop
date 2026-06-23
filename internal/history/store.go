@@ -11,6 +11,11 @@ import (
 	"github.com/Furthen64/lltop/internal/config"
 )
 
+type RunRecordRef struct {
+	Path   string
+	Record *RunRecord
+}
+
 func SaveRunRecord(runsDir string, record *RunRecord) (string, error) {
 	if err := os.MkdirAll(runsDir, 0o755); err != nil {
 		return "", err
@@ -84,4 +89,28 @@ func FindLatestRunRecordForProfile(runsDir, profileName string) (string, *RunRec
 		}
 	}
 	return "", nil, fmt.Errorf("no run record found for profile %q", profileName)
+}
+
+func FindRunRecordsForProfile(runsDir, profileName string) ([]RunRecordRef, error) {
+	entries, err := filepath.Glob(filepath.Join(runsDir, "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(entries)))
+
+	records := make([]RunRecordRef, 0, len(entries))
+	for _, entry := range entries {
+		record, err := LoadRunRecord(entry)
+		if err != nil {
+			return nil, err
+		}
+		if !strings.EqualFold(record.ProfileName, profileName) {
+			continue
+		}
+		records = append(records, RunRecordRef{
+			Path:   entry,
+			Record: record,
+		})
+	}
+	return records, nil
 }

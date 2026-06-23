@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,15 +19,24 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type viewMode string
+
+const (
+	mainView  viewMode = "main"
+	notesView viewMode = "notes"
+)
+
 type Model struct {
 	cfg            *config.GlobalConfig
 	profiles       []*config.Profile
 	selectedIdx    int
 	runner         *runner.Runner
 	logViewport    viewport.Model
+	noteViewport   viewport.Model
 	stats          ServerStats
 	width          int
 	height         int
+	viewMode       viewMode
 	showHelp       bool
 	confirmMode    bool
 	confirmPrompt  string
@@ -35,18 +45,20 @@ type Model struct {
 	logAutoScroll  bool
 	historySummary history.ProfileSummary
 
-	logLines       []string
-	issues         []history.Issue
-	pendingQuit    bool
-	afterStop      func() tea.Cmd
-	currentCommand string
-	openedProfile  string
-	editorMode     string
-	annotationPath string
-	annotationRun  string
-	externalProc   externalProcess
-	externalLog    string
-	externalOffset int64
+	logLines        []string
+	issues          []history.Issue
+	pendingQuit     bool
+	afterStop       func() tea.Cmd
+	currentCommand  string
+	openedProfile   string
+	editorMode      string
+	annotationPath  string
+	annotationRun   string
+	noteEntries     []history.RunRecordRef
+	noteSelectedIdx int
+	externalProc    externalProcess
+	externalLog     string
+	externalOffset  int64
 }
 
 type ServerStats struct {
@@ -72,13 +84,17 @@ type runnerDoneMsg struct{ info runner.ExitInfo }
 type editorDoneMsg struct{ err error }
 
 func NewModel(cfg *config.GlobalConfig, profiles []*config.Profile, statusMsg string) *Model {
-	vp := viewport.New(0, 0)
-	vp.SetContent("")
+	logVP := viewport.New(0, 0)
+	logVP.SetContent("")
+	noteVP := viewport.New(0, 0)
+	noteVP.SetContent("")
 	m := &Model{
 		cfg:           cfg,
 		profiles:      profiles,
 		runner:        runner.New(),
-		logViewport:   vp,
+		logViewport:   logVP,
+		noteViewport:  noteVP,
+		viewMode:      mainView,
 		logAutoScroll: true,
 		statusMsg:     statusMsg,
 		logLines:      []string{},
@@ -120,6 +136,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.handleLogScrollKey(msg.String()) {
+			return m, nil
+		}
+		if m.handleNoteViewKey(msg.String()) {
 			return m, nil
 		}
 
@@ -196,7 +215,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMsg = "Copied launch command to clipboard."
 			}
 		case "a":
+			if m.viewMode == notesView {
+				return m, m.annotateSelectedNoteCmd()
+			}
 			return m, m.annotateSelectedRunCmd()
+		case "N":
+			return m, m.enterNotesViewCmd()
 		case "l":
 			m.logAutoScroll = !m.logAutoScroll
 			if m.logAutoScroll {
@@ -285,6 +309,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMsg = "failed to store run record: " + err.Error()
 			} else {
 				m.refreshHistorySummary()
+				m.refreshNotesView()
 				m.statusMsg = fmt.Sprintf("Run ended with exit code %d.", msg.info.ExitCode)
 			}
 		}
@@ -308,6 +333,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMsg = err.Error()
 			} else {
 				m.refreshHistorySummary()
+				m.refreshNotesView()
 				m.statusMsg = "Saved run note."
 			}
 			return m, nil
@@ -324,6 +350,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleLogScrollKey(key string) bool {
+	if m.viewMode != mainView {
+		return false
+	}
 	if m.logAutoScroll {
 		return false
 	}
@@ -342,6 +371,45 @@ func (m *Model) handleLogScrollKey(key string) bool {
 	}
 	m.statusMsg = fmt.Sprintf("Log position %.0f%%", m.logViewport.ScrollPercent()*100)
 	return true
+}
+
+func (m *Model) handleNoteViewKey(key string) bool {
+	if m.viewMode != notesView {
+		return false
+	}
+
+	switch key {
+	case "esc", "q", "N":
+		m.viewMode = mainView
+		m.statusMsg = "Returned to main view."
+		return true
+	case "up":
+		if m.noteSelectedIdx > 0 {
+			m.noteSelectedIdx--
+			m.refreshNoteViewport()
+		}
+		return true
+	case "down":
+		if m.noteSelectedIdx < len(m.noteEntries)-1 {
+			m.noteSelectedIdx++
+			m.refreshNoteViewport()
+		}
+		return true
+	case "pgup", "ctrl+u":
+		m.noteViewport.HalfPageUp()
+		return true
+	case "pgdown", "ctrl+d":
+		m.noteViewport.HalfPageDown()
+		return true
+	case "home":
+		m.noteViewport.GotoTop()
+		return true
+	case "end":
+		m.noteViewport.GotoBottom()
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Model) currentLaunchText() (string, error) {
@@ -517,10 +585,16 @@ func (m *Model) updateLayout() {
 		height = 40
 	}
 	topH, _, _ := layoutHeights(height, m.showHelp)
-	rightW := max(40, width-max(24, int(float64(width)*0.30)))
+	leftW := max(24, int(float64(width)*0.30))
+	rightW := max(40, width-leftW)
 	m.logViewport.Width = max(1, rightW-6)
 	m.logViewport.Height = max(1, topH-6)
+	noteLeftW := max(28, int(float64(width)*0.35))
+	noteRightW := max(40, width-noteLeftW)
+	m.noteViewport.Width = max(1, noteRightW-6)
+	m.noteViewport.Height = max(1, topH-6)
 	m.refreshViewport()
+	m.refreshNoteViewport()
 }
 
 func (m *Model) reloadProfiles() error {
@@ -537,6 +611,7 @@ func (m *Model) reloadProfiles() error {
 		if profile.Name == m.openedProfile {
 			m.selectedIdx = i
 			m.refreshHistorySummary()
+			m.refreshNotesView()
 			return nil
 		}
 	}
@@ -544,6 +619,7 @@ func (m *Model) reloadProfiles() error {
 		m.selectedIdx = len(m.profiles) - 1
 	}
 	m.refreshHistorySummary()
+	m.refreshNotesView()
 	return nil
 }
 
@@ -556,6 +632,26 @@ func (m *Model) editSelectedCmd() tea.Cmd {
 	path := filepath.Join(m.cfg.ProfilesDir, config.SlugifyName(profile.Name)+".toml")
 	m.openedProfile = profile.Name
 	return openEditor(m.cfg.Editor, path)
+}
+
+func (m *Model) enterNotesViewCmd() tea.Cmd {
+	profile := m.selectedProfile()
+	if profile == nil {
+		m.statusMsg = "No profile selected."
+		return nil
+	}
+	m.viewMode = notesView
+	if err := m.loadNoteEntries(profile.Name); err != nil {
+		m.statusMsg = err.Error()
+		return nil
+	}
+	if len(m.noteEntries) == 0 {
+		m.statusMsg = fmt.Sprintf("No runs recorded for profile %s.", profile.Name)
+	} else {
+		m.statusMsg = fmt.Sprintf("Showing notes for %s.", profile.Name)
+	}
+	m.updateLayout()
+	return nil
 }
 
 func (m *Model) newProfileCmd() tea.Cmd {
@@ -614,6 +710,23 @@ func (m *Model) annotateSelectedRunCmd() tea.Cmd {
 		m.statusMsg = err.Error()
 		return nil
 	}
+	return m.annotateRunCmd(path, record)
+}
+
+func (m *Model) annotateSelectedNoteCmd() tea.Cmd {
+	ref := m.selectedNoteRef()
+	if ref == nil {
+		m.statusMsg = "No run selected."
+		return nil
+	}
+	return m.annotateRunCmd(ref.Path, ref.Record)
+}
+
+func (m *Model) annotateRunCmd(path string, record *history.RunRecord) tea.Cmd {
+	if record == nil {
+		m.statusMsg = "No run selected."
+		return nil
+	}
 	tmp, err := os.CreateTemp("", "lltop-note-*.md")
 	if err != nil {
 		m.statusMsg = err.Error()
@@ -621,7 +734,7 @@ func (m *Model) annotateSelectedRunCmd() tea.Cmd {
 	}
 	body := record.Notes
 	if body == "" {
-		body = annotationTemplate(profile.Name, record)
+		body = annotationTemplate(record.ProfileName, record)
 	}
 	if _, err := tmp.WriteString(body); err != nil {
 		_ = tmp.Close()
@@ -679,17 +792,110 @@ func (m *Model) refreshHistorySummary() {
 	m.historySummary = history.SummarizeProfileRuns(records, profile.Name)
 }
 
+func (m *Model) loadNoteEntries(profileName string) error {
+	entries, err := history.FindRunRecordsForProfile(m.cfg.RunsDir, profileName)
+	if err != nil {
+		return err
+	}
+	m.noteEntries = entries
+	if len(entries) == 0 {
+		m.noteSelectedIdx = 0
+	} else if m.noteSelectedIdx >= len(entries) {
+		m.noteSelectedIdx = len(entries) - 1
+	}
+	m.refreshNoteViewport()
+	return nil
+}
+
+func (m *Model) refreshNotesView() {
+	if m.viewMode != notesView {
+		return
+	}
+	profile := m.selectedProfile()
+	if profile == nil || m.cfg == nil {
+		m.noteEntries = nil
+		m.noteSelectedIdx = 0
+		m.refreshNoteViewport()
+		return
+	}
+	_ = m.loadNoteEntries(profile.Name)
+}
+
+func (m *Model) selectedNoteRef() *history.RunRecordRef {
+	if len(m.noteEntries) == 0 || m.noteSelectedIdx < 0 || m.noteSelectedIdx >= len(m.noteEntries) {
+		return nil
+	}
+	return &m.noteEntries[m.noteSelectedIdx]
+}
+
+func (m *Model) refreshNoteViewport() {
+	ref := m.selectedNoteRef()
+	if ref == nil || ref.Record == nil {
+		m.noteViewport.SetContent(dimStyle.Render("No runs recorded for this profile yet."))
+		m.noteViewport.GotoTop()
+		return
+	}
+	content := strings.TrimSpace(ref.Record.Notes)
+	if content == "" {
+		content = strings.TrimSpace(annotationTemplate(ref.Record.ProfileName, ref.Record))
+		content += "\n\n(no saved note yet; press 'a' to annotate this run)"
+	}
+	m.noteViewport.SetContent(content)
+	m.noteViewport.GotoTop()
+}
+
 func annotationTemplate(profileName string, record *history.RunRecord) string {
 	if record == nil {
 		return ""
 	}
-	return fmt.Sprintf(
-		"profile: %s\nrun_id: %s\ngeneration tok/s: %.2f\nprompt tok/s: %.2f\n\nnotes:\n",
-		profileName,
-		record.RunID,
-		record.LastEvalTokensPerSec,
-		record.LastPromptTokensPerSec,
-	)
+	var b strings.Builder
+	fmt.Fprintf(&b, "profile: %s\n", profileName)
+	fmt.Fprintf(&b, "run_id: %s\n", record.RunID)
+	fmt.Fprintf(&b, "started_at: %s\n", record.StartedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "duration_seconds: %.2f\n", record.DurationSeconds)
+	fmt.Fprintf(&b, "exit_code: %d\n", record.ExitCode)
+	fmt.Fprintf(&b, "exit_reason: %s\n", record.ExitReason)
+	fmt.Fprintf(&b, "generation_tok_s: %.2f\n", record.LastEvalTokensPerSec)
+	fmt.Fprintf(&b, "prompt_tok_s: %.2f\n", record.LastPromptTokensPerSec)
+	b.WriteString("\nrun_parameters:\n")
+	writeAnnotationParam(&b, "llama_server", record.LlamaServer)
+	writeAnnotationParam(&b, "model", record.Model)
+	writeAnnotationParam(&b, "host", record.Host)
+	writeAnnotationParam(&b, "port", strconv.Itoa(record.Port))
+	writeAnnotationParam(&b, "alias", record.Alias)
+	writeAnnotationParam(&b, "ctx", strconv.Itoa(record.Ctx))
+	writeAnnotationParam(&b, "ngl", strconv.Itoa(record.NGL))
+	writeAnnotationParam(&b, "cache_k", record.CacheK)
+	writeAnnotationParam(&b, "cache_v", record.CacheV)
+	writeAnnotationParam(&b, "temp", strconv.FormatFloat(record.Temp, 'f', -1, 64))
+	writeAnnotationParam(&b, "top_p", strconv.FormatFloat(record.TopP, 'f', -1, 64))
+	writeAnnotationParam(&b, "top_k", strconv.Itoa(record.TopK))
+	writeAnnotationParam(&b, "min_p", strconv.FormatFloat(record.MinP, 'f', -1, 64))
+	writeAnnotationParam(&b, "batch", strconv.Itoa(record.Batch))
+	writeAnnotationParam(&b, "ubatch", strconv.Itoa(record.UBatch))
+	writeAnnotationParam(&b, "parallel", strconv.Itoa(record.Parallel))
+	if record.Threads > 0 {
+		writeAnnotationParam(&b, "threads", strconv.Itoa(record.Threads))
+	}
+	writeAnnotationParam(&b, "metrics", strconv.FormatBool(record.Metrics))
+	writeAnnotationParam(&b, "jinja", strconv.FormatBool(record.Jinja))
+	writeAnnotationParam(&b, "no_mmap", strconv.FormatBool(record.NoMmap))
+	writeAnnotationParam(&b, "chat_template", record.ChatTemplate)
+	if len(record.ExtraArgs) > 0 {
+		writeAnnotationParam(&b, "extra_args", strings.Join(record.ExtraArgs, " "))
+	}
+	if record.GeneratedCommand != "" {
+		fmt.Fprintf(&b, "\ncommand:\n%s\n", record.GeneratedCommand)
+	}
+	b.WriteString("\nnotes:\n")
+	return b.String()
+}
+
+func writeAnnotationParam(b *strings.Builder, key, value string) {
+	if value == "" {
+		return
+	}
+	fmt.Fprintf(b, "%s: %s\n", key, value)
 }
 
 func waitForLog(r *runner.Runner) tea.Cmd {
