@@ -1,6 +1,8 @@
 package parser
 
 import (
+	_ "embed"
+	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"
@@ -41,6 +43,8 @@ type ParsedLine struct {
 	IsError             bool
 	ErrorKind           string
 	ErrorMessage        string
+	HintKind            string
+	HintMessage         string
 }
 
 var (
@@ -55,7 +59,17 @@ var (
 	progressRe   = regexp.MustCompile(`prompt processing progress, n_tokens = (\d+), batch\.n_tokens = (\d+), progress = (\d+\.\d+)`)
 	chatFormatRe = regexp.MustCompile(`params_from_.*?Chat format: (.+)`)
 	newPromptRe  = regexp.MustCompile(`new prompt, n_ctx_slot = (\d+), n_keep = (\d+), task\.n_tokens = (\d+)`)
+	hintRules    = mustLoadHintRules()
 )
+
+//go:embed hint_rules.json
+var hintRulesJSON []byte
+
+type hintRule struct {
+	Kind     string   `json:"kind"`
+	Message  string   `json:"message"`
+	MatchAll []string `json:"match_all"`
+}
 
 func ParseLine(line string) ParsedLine {
 	p := ParsedLine{Raw: line}
@@ -115,6 +129,11 @@ func ParseLine(line string) ParsedLine {
 		p.Cancelled = true
 	}
 
+	if hintKind, hintMessage, ok := classifyHint(line); ok {
+		p.HintKind = hintKind
+		p.HintMessage = hintMessage
+	}
+
 	lower := strings.ToLower(line)
 	switch {
 	case strings.Contains(lower, "cuda out of memory"):
@@ -141,6 +160,38 @@ func ParseLine(line string) ParsedLine {
 	}
 
 	return p
+}
+
+func classifyHint(line string) (kind string, message string, ok bool) {
+	lower := strings.ToLower(line)
+	for _, rule := range hintRules {
+		if matchesAll(lower, rule.MatchAll) {
+			return rule.Kind, rule.Message, true
+		}
+	}
+	return "", "", false
+}
+
+func mustLoadHintRules() []hintRule {
+	var rules []hintRule
+	if err := json.Unmarshal(hintRulesJSON, &rules); err != nil {
+		panic("parser: invalid hint_rules.json: " + err.Error())
+	}
+	for _, rule := range rules {
+		if strings.TrimSpace(rule.Kind) == "" || strings.TrimSpace(rule.Message) == "" || len(rule.MatchAll) == 0 {
+			panic("parser: invalid hint rule in hint_rules.json")
+		}
+	}
+	return rules
+}
+
+func matchesAll(line string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if !strings.Contains(line, strings.ToLower(pattern)) {
+			return false
+		}
+	}
+	return true
 }
 
 func atoi(s string) int {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Furthen64/lltop/internal/history"
+	"github.com/Furthen64/lltop/internal/parser"
 	"github.com/Furthen64/lltop/internal/runner"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -78,9 +79,10 @@ func (m *Model) renderProfiles() string {
 		}
 	}
 	for i, profile := range m.profiles {
+		icon := m.profileRunStatusIcon(profile.Name)
 		name := fmt.Sprintf("%-*s", maxNameWidth, profile.Name)
 		size := modelFileSizeText(profile.Model)
-		line := name
+		line := icon + " " + name
 		if size != "" {
 			line += dimStyle.Render("  " + size)
 		}
@@ -97,6 +99,13 @@ func (m *Model) renderProfiles() string {
 		}
 	}
 	return b.String()
+}
+
+func (m *Model) profileRunStatusIcon(profileName string) string {
+	if m.profileRunState[strings.ToLower(profileName)] {
+		return runStateDoneStyle.Render("🔵")
+	}
+	return "🌟"
 }
 
 func modelFileSizeText(path string) string {
@@ -226,6 +235,10 @@ func (m *Model) renderStatus() string {
 	b.WriteString(renderHistorySummary(m.historySummary))
 	if m.stats.LastError != "" {
 		b.WriteString(errStyle.Render("last error: " + m.stats.LastError))
+		b.WriteByte('\n')
+	}
+	if m.stats.LastHint != "" {
+		b.WriteString(warnStyle.Render("note: " + m.stats.LastHint))
 		b.WriteByte('\n')
 	}
 	if m.statusMsg != "" {
@@ -407,6 +420,9 @@ func layoutHeights(height int, showHelp bool) (topH, statusH, keysH int) {
 }
 
 func colorizeLogLine(line string) string {
+	if _, _, ok := parserHint(line); ok {
+		return warnStyle.Render(line)
+	}
 	lower := strings.ToLower(line)
 	switch {
 	case strings.Contains(lower, "error") || strings.Contains(lower, "failed"):
@@ -422,4 +438,12 @@ func colorizeLogLine(line string) string {
 	default:
 		return line
 	}
+}
+
+func parserHint(line string) (kind string, message string, ok bool) {
+	parsed := parser.ParseLine(line)
+	if parsed.HintMessage == "" {
+		return "", "", false
+	}
+	return parsed.HintKind, parsed.HintMessage, true
 }

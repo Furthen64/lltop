@@ -134,6 +134,32 @@ func TestRenderStatusShowsHistorySummary(t *testing.T) {
 	}
 }
 
+func TestRenderStatusShowsHelpfulHint(t *testing.T) {
+	m := NewModel(testGlobalConfig(), nil, "")
+	profile := testProfile()
+	m.profiles = []*config.Profile{profile}
+	m.stats.LastHint = "I tried to auto-fit GPU params to available VRAM, but you already set n_gpu_layers explicitly, so I skipped the auto-fit step."
+
+	status := m.renderStatus()
+	if !strings.Contains(status, "note: I tried to auto-fit GPU params to available VRAM") {
+		t.Fatalf("expected status to include helpful hint, got %q", status)
+	}
+}
+
+func TestParserHintRecognizesKnownHelpfulWarning(t *testing.T) {
+	line := "W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort."
+	kind, message, ok := parserHint(line)
+	if !ok {
+		t.Fatal("expected known warning to produce a helpful hint")
+	}
+	if kind != "gpu_layers_autofit_skipped" {
+		t.Fatalf("kind = %q", kind)
+	}
+	if !strings.Contains(message, "I tried to auto-fit GPU params") {
+		t.Fatalf("message = %q", message)
+	}
+}
+
 func TestRenderProfilesShowsModelFileSize(t *testing.T) {
 	modelPath := filepath.Join(t.TempDir(), "qwen.gguf")
 	file, err := os.Create(modelPath)
@@ -155,6 +181,40 @@ func TestRenderProfilesShowsModelFileSize(t *testing.T) {
 	profiles := m.renderProfiles()
 	if !strings.Contains(profiles, "1.5 KiB") {
 		t.Fatalf("expected profile list to include model file size, got %q", profiles)
+	}
+}
+
+func TestRenderProfilesShowsRunStateIcons(t *testing.T) {
+	cfg := testGlobalConfig()
+	cfg.RunsDir = t.TempDir()
+
+	ran := config.DefaultProfile(cfg, "ran")
+	ran.Model = "/models/ran.gguf"
+	fresh := config.DefaultProfile(cfg, "fresh")
+	fresh.Model = "/models/fresh.gguf"
+
+	record := history.NewRunRecord(
+		cfg,
+		ran,
+		"cmd",
+		time.Date(2026, 6, 23, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 6, 23, 10, 0, 5, 0, time.UTC),
+		0,
+		"exit",
+		history.StatsSnapshot{},
+	)
+	if _, err := history.SaveRunRecord(cfg.RunsDir, record); err != nil {
+		t.Fatalf("failed to save run record: %v", err)
+	}
+
+	m := NewModel(cfg, []*config.Profile{ran, fresh}, "")
+	profiles := m.renderProfiles()
+
+	if !strings.Contains(profiles, "🔵 ran") {
+		t.Fatalf("expected ran profile to include completed icon, got %q", profiles)
+	}
+	if !strings.Contains(profiles, "🌟 fresh") {
+		t.Fatalf("expected fresh profile to include new icon, got %q", profiles)
 	}
 }
 

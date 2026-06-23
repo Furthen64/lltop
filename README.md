@@ -19,6 +19,7 @@ This project is currently a work in progress/proof of concept.
 - Live stdout/stderr capture into timestamped log files
 - Runtime parsing for token throughput, GPU memory, offloaded layers, prompt
   progress, chat format, context slot size, and common startup errors
+- JSON-backed log hint rules for known benign or explanatory backend messages
 - Run history saved as JSON for completed launches
 - Recent-failure warning before repeating the same failing startup scenario
 - Detection of externally started `llama-server` processes
@@ -168,6 +169,26 @@ default_port = 8080
 ```
 
 Paths support `~` and environment variable expansion.
+
+## Log Hints
+
+`lltop` can attach short explanatory notes to known log lines that are useful
+context but not necessarily hard failures. These rules are defined in:
+
+```text
+internal/parser/hint_rules.json
+```
+
+Each rule currently has:
+
+- `kind`: stable identifier for the hint
+- `message`: text shown in the status panel
+- `match_all`: string fragments that must all appear in the log line
+
+This is intended for "if this, then that" style guidance. For example, the
+`common_fit_params` warning about `n_gpu_layers already set by user` can be
+shown as a note explaining that `llama.cpp` tried to auto-fit VRAM settings
+but skipped that step because the user already set `n_gpu_layers` explicitly.
 
 ## Profiles
 

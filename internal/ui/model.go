@@ -27,23 +27,24 @@ const (
 )
 
 type Model struct {
-	cfg            *config.GlobalConfig
-	profiles       []*config.Profile
-	selectedIdx    int
-	runner         *runner.Runner
-	logViewport    viewport.Model
-	noteViewport   viewport.Model
-	stats          ServerStats
-	width          int
-	height         int
-	viewMode       viewMode
-	showHelp       bool
-	confirmMode    bool
-	confirmPrompt  string
-	confirmAction  func()
-	statusMsg      string
-	logAutoScroll  bool
-	historySummary history.ProfileSummary
+	cfg             *config.GlobalConfig
+	profiles        []*config.Profile
+	selectedIdx     int
+	runner          *runner.Runner
+	logViewport     viewport.Model
+	noteViewport    viewport.Model
+	stats           ServerStats
+	width           int
+	height          int
+	viewMode        viewMode
+	showHelp        bool
+	confirmMode     bool
+	confirmPrompt   string
+	confirmAction   func()
+	statusMsg       string
+	logAutoScroll   bool
+	historySummary  history.ProfileSummary
+	profileRunState map[string]bool
 
 	logLines        []string
 	issues          []history.Issue
@@ -77,6 +78,7 @@ type ServerStats struct {
 	GPUModelMiB         int
 	GPUContextMiB       int
 	GPUComputeMiB       int
+	LastHint            string
 }
 
 type logMsg string
@@ -89,18 +91,19 @@ func NewModel(cfg *config.GlobalConfig, profiles []*config.Profile, statusMsg st
 	noteVP := viewport.New(0, 0)
 	noteVP.SetContent("")
 	m := &Model{
-		cfg:           cfg,
-		profiles:      profiles,
-		runner:        runner.New(),
-		logViewport:   logVP,
-		noteViewport:  noteVP,
-		viewMode:      mainView,
-		logAutoScroll: true,
-		statusMsg:     statusMsg,
-		logLines:      []string{},
-		issues:        []history.Issue{},
+		cfg:             cfg,
+		profiles:        profiles,
+		runner:          runner.New(),
+		logViewport:     logVP,
+		noteViewport:    noteVP,
+		viewMode:        mainView,
+		logAutoScroll:   true,
+		statusMsg:       statusMsg,
+		logLines:        []string{},
+		issues:          []history.Issue{},
+		profileRunState: map[string]bool{},
 	}
-	m.refreshHistorySummary()
+	m.refreshRunHistoryState()
 	return m
 }
 
@@ -308,7 +311,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, err := history.SaveRunRecord(m.cfg.RunsDir, record); err != nil {
 				m.statusMsg = "failed to store run record: " + err.Error()
 			} else {
-				m.refreshHistorySummary()
+				m.refreshRunHistoryState()
 				m.refreshNotesView()
 				m.statusMsg = fmt.Sprintf("Run ended with exit code %d.", msg.info.ExitCode)
 			}
@@ -548,6 +551,9 @@ func (m *Model) consumeParsedLine(line string) {
 		m.stats.GPUModelMiB = parsed.GPUModelMiB
 		m.stats.GPUContextMiB = parsed.GPUContextMiB
 		m.stats.GPUComputeMiB = parsed.GPUComputeMiB
+	}
+	if parsed.HintMessage != "" {
+		m.stats.LastHint = parsed.HintMessage
 	}
 	if parsed.IsError {
 		m.stats.LastError = parsed.ErrorMessage
@@ -790,6 +796,35 @@ func (m *Model) refreshHistorySummary() {
 		return
 	}
 	m.historySummary = history.SummarizeProfileRuns(records, profile.Name)
+}
+
+func (m *Model) refreshRunHistoryState() {
+	if m.cfg == nil {
+		m.profileRunState = map[string]bool{}
+		m.historySummary = history.ProfileSummary{}
+		return
+	}
+
+	records, err := history.LoadRunRecords(m.cfg.RunsDir)
+	if err != nil {
+		m.profileRunState = map[string]bool{}
+		if profile := m.selectedProfile(); profile != nil {
+			m.historySummary = history.ProfileSummary{ProfileName: profile.Name}
+		} else {
+			m.historySummary = history.ProfileSummary{}
+		}
+		return
+	}
+
+	state := make(map[string]bool, len(records))
+	for _, record := range records {
+		if record == nil {
+			continue
+		}
+		state[strings.ToLower(record.ProfileName)] = true
+	}
+	m.profileRunState = state
+	m.refreshHistorySummary()
 }
 
 func (m *Model) loadNoteEntries(profileName string) error {

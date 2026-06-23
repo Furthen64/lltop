@@ -2,6 +2,12 @@ package parser
 
 import "testing"
 
+func TestHintRulesLoaded(t *testing.T) {
+	if len(hintRules) == 0 {
+		t.Fatal("expected embedded hint rules to be loaded")
+	}
+}
+
 func TestParsePromptEval(t *testing.T) {
 	line := "prompt eval time =     810.49 ms /   114 tokens (    7.11 ms per token,   140.66 tokens per second)"
 	p := ParseLine(line)
@@ -69,5 +75,19 @@ func TestParseTotalTime(t *testing.T) {
 	}
 	if p.TotalTokens != 563 {
 		t.Fatalf("TotalTokens = %v", p.TotalTokens)
+	}
+}
+
+func TestParseKnownHintForGPUAutoFitWarning(t *testing.T) {
+	line := "W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort."
+	p := ParseLine(line)
+	if p.HintKind != "gpu_layers_autofit_skipped" {
+		t.Fatalf("HintKind = %q", p.HintKind)
+	}
+	if p.HintMessage == "" {
+		t.Fatal("expected HintMessage to be populated")
+	}
+	if p.IsError {
+		t.Fatal("expected known hint not to be treated as a parser error")
 	}
 }
