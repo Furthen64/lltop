@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 )
 
 func EffectiveLlamaServer(cfg *GlobalConfig, p *Profile) string {
@@ -38,7 +39,7 @@ func ValidateLaunchProfile(cfg *GlobalConfig, p *Profile) error {
 	if err != nil {
 		return fmt.Errorf("llama_server not found: %w", err)
 	}
-	if info.Mode()&0o111 == 0 {
+	if !isExecutableFile(llamaServer, info.Mode(), runtime.GOOS, os.Getenv("PATHEXT")) {
 		return fmt.Errorf("llama_server is not executable")
 	}
 

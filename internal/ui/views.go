@@ -47,13 +47,21 @@ func (m *Model) renderProfiles() string {
 		b.WriteString(dimStyle.Render("No profiles found."))
 		return b.String()
 	}
+	maxNameWidth := 0
+	for _, profile := range m.profiles {
+		if len(profile.Name) > maxNameWidth {
+			maxNameWidth = len(profile.Name)
+		}
+	}
 	for i, profile := range m.profiles {
-		line := profile.Name
-		if size := modelFileSizeText(profile.Model); size != "" {
+		name := fmt.Sprintf("%-*s", maxNameWidth, profile.Name)
+		size := modelFileSizeText(profile.Model)
+		line := name
+		if size != "" {
 			line += dimStyle.Render("  " + size)
 		}
 		if profile.Description != "" {
-			line += dimStyle.Render(" — " + profile.Description)
+			line += dimStyle.Render("  " + profile.Description)
 		}
 		if i == m.selectedIdx {
 			b.WriteString(selectedStyle.Render(line))
@@ -189,11 +197,11 @@ func (m *Model) renderKeys() string {
 	return strings.Join([]string{
 		title,
 		"",
-		"navigation: Up/Down select profile  Enter launch  q quit",
-		"server: s stop gracefully  S force kill  r restart  l toggle log autoscroll",
-		"log: when autoscroll=false, PgUp/PgDown or Ctrl+U/Ctrl+D scroll; Home/End jump",
-		"profile: e edit selected  n new profile  d duplicate selected  a annotate latest run  v show command  c copy command",
-		"help: h/? hide this help",
+		fmt.Sprintf("%-12s %s", "navigation:", "Up/Down select profile  Enter launch  q quit"),
+		fmt.Sprintf("%-12s %s", "server:", "s stop gracefully  S force kill  r restart  l toggle log autoscroll"),
+		fmt.Sprintf("%-12s %s", "log:", "when autoscroll=false, PgUp/PgDown or Ctrl+U/Ctrl+D scroll; Home/End jump"),
+		fmt.Sprintf("%-12s %s", "profile:", "e edit selected  n new profile  d duplicate selected  a annotate latest run  v show command  c copy command"),
+		fmt.Sprintf("%-12s %s", "help:", "h/? hide this help"),
 	}, "\n")
 }
 

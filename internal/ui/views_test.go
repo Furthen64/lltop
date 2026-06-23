@@ -40,7 +40,8 @@ func TestRenderKeys_TogglesExpandedHelp(t *testing.T) {
 		"server:",
 		"profile:",
 		"annotate latest run",
-		"help: h/? hide this help",
+		"help:",
+		"h/? hide this help",
 	} {
 		if !strings.Contains(expanded, want) {
 			t.Fatalf("expected expanded help to contain %q, got %q", want, expanded)
