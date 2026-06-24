@@ -30,6 +30,7 @@ type Profile struct {
 	UBatch       int      `toml:"ubatch"`
 	Parallel     int      `toml:"parallel"`
 	Threads      int      `toml:"threads"`
+	FlashAttn    string   `toml:"flash_attn"`
 	Jinja        bool     `toml:"jinja"`
 	Metrics      bool     `toml:"metrics"`
 	NoMmap       bool     `toml:"no_mmap"`
@@ -69,6 +70,7 @@ func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
 		UBatch:       256,
 		Parallel:     1,
 		Threads:      0,
+		FlashAttn:    "auto",
 		Jinja:        true,
 		Metrics:      true,
 		NoMmap:       true,
@@ -114,6 +116,9 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	}
 	if p.Parallel == 0 {
 		p.Parallel = defaults.Parallel
+	}
+	if p.FlashAttn == "" {
+		p.FlashAttn = defaults.FlashAttn
 	}
 	if p.LlamaServer == "" && cfg != nil {
 		p.LlamaServer = cfg.LlamaServer
@@ -190,6 +195,7 @@ func SaveProfile(path string, p *Profile) error {
 	fmt.Fprintf(&b, "ubatch = %d\n", p.UBatch)
 	fmt.Fprintf(&b, "parallel = %d\n", p.Parallel)
 	fmt.Fprintf(&b, "threads = %d\n", p.Threads)
+	fmt.Fprintf(&b, "flash_attn = %q\n", p.FlashAttn)
 	fmt.Fprintf(&b, "jinja = %t\n", p.Jinja)
 	fmt.Fprintf(&b, "metrics = %t\n", p.Metrics)
 	fmt.Fprintf(&b, "no_mmap = %t\n", p.NoMmap)

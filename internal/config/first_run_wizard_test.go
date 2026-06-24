@@ -85,6 +85,9 @@ func TestGenerateProfilesForModelsCreatesUniqueProfileFiles(t *testing.T) {
 	if !strings.Contains(string(data), `chat_template = "chatml"`) {
 		t.Fatalf("expected generated profile to include default chat template, got %s", data)
 	}
+	if !strings.Contains(string(data), `flash_attn = "auto"`) {
+		t.Fatalf("expected generated profile to include default flash_attn, got %s", data)
+	}
 }
 
 func TestResolveLlamaServerPathAcceptsExecutableFile(t *testing.T) {

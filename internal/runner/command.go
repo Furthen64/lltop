@@ -44,6 +44,7 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 		"-ngl", strconv.Itoa(p.NGL),
 		"--cache-type-k", p.CacheK,
 		"--cache-type-v", p.CacheV,
+		"--flash-attn", p.FlashAttn,
 		"--temp", formatFloat(p.Temp),
 		"--top-p", formatFloat(p.TopP),
 		"--top-k", strconv.Itoa(p.TopK),
@@ -67,7 +68,7 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 	if p.ChatTemplate != "" {
 		args = append(args, "--chat-template", p.ChatTemplate)
 	}
-	args = append(args, p.ExtraArgs...)
+	args = append(args, filterConflictingExtraArgs(p.ExtraArgs)...)
 
 	var b strings.Builder
 	b.WriteString(shellQuote(cmdPath))
@@ -77,6 +78,31 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 	}
 
 	return CommandSpec{Path: cmdPath, Args: args, Display: b.String()}, nil
+}
+
+func filterConflictingExtraArgs(args []string) []string {
+	filtered := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "-fa" || arg == "--flash-attn":
+			if i+1 < len(args) && isFlashAttnArgValue(args[i+1]) {
+				i++
+			}
+			continue
+		case strings.HasPrefix(arg, "--flash-attn="):
+			continue
+		case strings.HasPrefix(arg, "-fa="):
+			continue
+		default:
+			filtered = append(filtered, arg)
+		}
+	}
+	return filtered
+}
+
+func isFlashAttnArgValue(value string) bool {
+	return config.IsValidFlashAttnValue(value)
 }
 
 func formatFloat(v float64) string {

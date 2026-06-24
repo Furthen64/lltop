@@ -4,7 +4,19 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 )
+
+var validFlashAttnValues = map[string]struct{}{
+	"auto": {},
+	"on":   {},
+	"off":  {},
+}
+
+func IsValidFlashAttnValue(value string) bool {
+	_, ok := validFlashAttnValues[strings.ToLower(value)]
+	return ok
+}
 
 func EffectiveLlamaServer(cfg *GlobalConfig, p *Profile) string {
 	if p != nil && p.LlamaServer != "" {
@@ -22,6 +34,9 @@ func ValidateProfileConfig(p *Profile) error {
 	}
 	if p.Port < 1 || p.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if !IsValidFlashAttnValue(p.FlashAttn) {
+		return fmt.Errorf("flash_attn must be one of: auto, on, off")
 	}
 	return nil
 }

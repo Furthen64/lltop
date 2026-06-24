@@ -88,14 +88,18 @@ func TestLayoutHeights_ExpandsHelpArea(t *testing.T) {
 func TestRenderStatusShowsLaunchCommand(t *testing.T) {
 	m := NewModel(testGlobalConfig(), nil, "")
 	profile := testProfile()
+	profile.FlashAttn = "on"
 	m.profiles = []*config.Profile{profile}
 
 	status := m.renderStatus()
-	if !strings.Contains(status, "launch:") {
+	if !strings.Contains(status, "Launch") {
 		t.Fatalf("expected current server status to include launch text, got %q", status)
 	}
 	if !strings.Contains(status, "--chat-template chatml") {
 		t.Fatalf("expected launch text to include chat template, got %q", status)
+	}
+	if !strings.Contains(status, "FlashAttn") || !strings.Contains(status, "on") {
+		t.Fatalf("expected current server status to include flash attention setting, got %q", status)
 	}
 }
 
@@ -127,7 +131,7 @@ func TestRenderStatusShowsHistorySummary(t *testing.T) {
 	}
 
 	status := m.renderStatus()
-	for _, want := range []string{"history: 3 run(s)", "gen tok/s latest 4.00", "ingest tok/s latest 100.00"} {
+	for _, want := range []string{"History", "3 run(s)", "Gen tok/s", "latest 4.00", "Ingest tok/s", "latest 100.00"} {
 		if !strings.Contains(status, want) {
 			t.Fatalf("expected status to contain %q, got %q", want, status)
 		}
@@ -210,11 +214,50 @@ func TestRenderProfilesShowsRunStateIcons(t *testing.T) {
 	m := NewModel(cfg, []*config.Profile{ran, fresh}, "")
 	profiles := m.renderProfiles()
 
-	if !strings.Contains(profiles, "🔵 ran") {
+	if !strings.Contains(profiles, "⚫ ran") {
 		t.Fatalf("expected ran profile to include completed icon, got %q", profiles)
 	}
-	if !strings.Contains(profiles, "🌟 fresh") {
+	if !strings.Contains(profiles, "🟠 fresh") {
 		t.Fatalf("expected fresh profile to include new icon, got %q", profiles)
+	}
+}
+
+func TestRenderProfilesShowsRunningIconForActiveProfile(t *testing.T) {
+	m := NewModel(testGlobalConfig(), nil, "")
+	profile := testProfile()
+	m.profiles = []*config.Profile{profile}
+	m.runner.Profile = profile
+	m.runner.Status = "running"
+
+	profiles := m.renderProfiles()
+	if !strings.Contains(profiles, "🔵 qwen") {
+		t.Fatalf("expected active profile to include running icon, got %q", profiles)
+	}
+}
+
+func TestRenderProfilesSelectionCoversWholeRanRow(t *testing.T) {
+	cfg := testGlobalConfig()
+	cfg.RunsDir = t.TempDir()
+
+	ran := config.DefaultProfile(cfg, "ran")
+	record := history.NewRunRecord(
+		cfg,
+		ran,
+		"cmd",
+		time.Date(2026, 6, 23, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 6, 23, 10, 0, 5, 0, time.UTC),
+		0,
+		"exit",
+		history.StatsSnapshot{},
+	)
+	if _, err := history.SaveRunRecord(cfg.RunsDir, record); err != nil {
+		t.Fatalf("failed to save run record: %v", err)
+	}
+
+	m := NewModel(cfg, []*config.Profile{ran}, "")
+	rendered := m.renderProfiles()
+	if rendered != "profiles\n\n⚫ ran" {
+		t.Fatalf("expected selected ran row to render as a single plain row, got %q", rendered)
 	}
 }
 
@@ -318,6 +361,7 @@ func TestAnnotationTemplateIncludesRunParameters(t *testing.T) {
 		UBatch:                 256,
 		Parallel:               1,
 		Threads:                16,
+		FlashAttn:              "on",
 		Metrics:                true,
 		Jinja:                  true,
 		NoMmap:                 true,
@@ -335,6 +379,7 @@ func TestAnnotationTemplateIncludesRunParameters(t *testing.T) {
 		"ctx: 65536",
 		"temp: 0.1",
 		"threads: 16",
+		"flash_attn: on",
 		"extra_args: --flash-attn --prio 2",
 		"command:",
 		"/usr/bin/llama-server -m /models/qwen.gguf --temp 0.1",

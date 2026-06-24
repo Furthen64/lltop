@@ -12,6 +12,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type statusField struct {
+	label string
+	value string
+}
+
 func (m *Model) View() string {
 	width := m.width
 	if width <= 0 {
@@ -79,19 +84,26 @@ func (m *Model) renderProfiles() string {
 		}
 	}
 	for i, profile := range m.profiles {
-		icon := m.profileRunStatusIcon(profile.Name)
+		icon, iconStyle := m.profileRunStatusIcon(profile.Name)
 		name := fmt.Sprintf("%-*s", maxNameWidth, profile.Name)
 		size := modelFileSizeText(profile.Model)
-		line := icon + " " + name
-		if size != "" {
-			line += dimStyle.Render("  " + size)
-		}
-		if profile.Description != "" {
-			line += dimStyle.Render("  " + profile.Description)
-		}
 		if i == m.selectedIdx {
+			line := icon + " " + name
+			if size != "" {
+				line += "  " + size
+			}
+			if profile.Description != "" {
+				line += "  " + profile.Description
+			}
 			b.WriteString(selectedStyle.Render(line))
 		} else {
+			line := iconStyle.Render(icon) + " " + name
+			if size != "" {
+				line += dimStyle.Render("  " + size)
+			}
+			if profile.Description != "" {
+				line += dimStyle.Render("  " + profile.Description)
+			}
 			b.WriteString(line)
 		}
 		if i < len(m.profiles)-1 {
@@ -101,11 +113,19 @@ func (m *Model) renderProfiles() string {
 	return b.String()
 }
 
-func (m *Model) profileRunStatusIcon(profileName string) string {
-	if m.profileRunState[strings.ToLower(profileName)] {
-		return runStateDoneStyle.Render("🔵")
+func (m *Model) profileRunStatusIcon(profileName string) (string, lipgloss.Style) {
+	if m.runner != nil && m.runner.Profile != nil && strings.EqualFold(m.runner.Profile.Name, profileName) {
+		switch m.runner.Status {
+		case "running":
+			return "🔵", runStateRunStyle
+		case "stopping":
+			return "🟡", runStateStopStyle
+		}
 	}
-	return "🌟"
+	if m.profileRunState[strings.ToLower(profileName)] {
+		return "⚫", runStateDoneStyle
+	}
+	return "🟠", lipgloss.NewStyle()
 }
 
 func modelFileSizeText(path string) string {
@@ -186,14 +206,18 @@ func (m *Model) renderStatus() string {
 	b.WriteString(titleStyle.Render("current server"))
 	b.WriteString("\n\n")
 
+	fields := make([]statusField, 0, 12)
 	profile := m.selectedProfile()
 	if m.runner != nil && m.runner.Profile != nil && m.runner.IsRunning() {
 		profile = m.runner.Profile
 	}
 	if profile != nil {
-		b.WriteString(fmt.Sprintf("profile: %s\n", profile.Name))
-		b.WriteString(fmt.Sprintf("model: %s\n", profile.Model))
-		b.WriteString(fmt.Sprintf("bind: %s:%d\n", profile.Host, profile.Port))
+		fields = append(fields,
+			statusField{label: "Profile", value: profile.Name},
+			statusField{label: "Model", value: profile.Model},
+			statusField{label: "Bind", value: fmt.Sprintf("%s:%d", profile.Host, profile.Port)},
+			statusField{label: "FlashAttn", value: profile.FlashAttn},
+		)
 	}
 	status := "stopped"
 	pid := 0
@@ -215,23 +239,42 @@ func (m *Model) renderStatus() string {
 			externalCmd = proc.Command
 		}
 	}
-	b.WriteString(fmt.Sprintf("status: %s", status))
+	statusValue := status
 	if pid > 0 {
-		b.WriteString(fmt.Sprintf(" (pid %d)", pid))
+		statusValue += fmt.Sprintf(" (pid %d)", pid)
 	}
 	if m.runner != nil && !m.runner.StartTime.IsZero() {
-		b.WriteString(fmt.Sprintf("  uptime: %s", time.Since(m.runner.StartTime).Truncate(time.Second)))
+		statusValue += fmt.Sprintf("  uptime %s", time.Since(m.runner.StartTime).Truncate(time.Second))
 	}
-	b.WriteByte('\n')
+	fields = append(fields, statusField{label: "Status", value: statusValue})
 	launchText := m.renderedLaunchText(externalCmd)
 	if launchText != "" {
-		b.WriteString(fmt.Sprintf("launch: %s\n", launchText))
+		fields = append(fields, statusField{label: "Launch", value: launchText})
 	}
-	b.WriteString(fmt.Sprintf("prompt tok/s: %.2f  eval tok/s: %.2f  offload: %d/%d  progress: %.2f\n",
-		m.stats.PromptTokensPerSec, m.stats.EvalTokensPerSec, m.stats.OffloadedLayers, m.stats.TotalLayers, m.stats.Progress))
+	fields = append(fields, statusField{
+		label: "Throughput",
+		value: fmt.Sprintf(
+			"prompt %.2f tok/s  eval %.2f tok/s",
+			m.stats.PromptTokensPerSec,
+			m.stats.EvalTokensPerSec,
+		),
+	})
+	fields = append(fields, statusField{
+		label: "Runtime",
+		value: fmt.Sprintf(
+			"offload %d/%d  progress %.2f",
+			m.stats.OffloadedLayers,
+			m.stats.TotalLayers,
+			m.stats.Progress,
+		),
+	})
 	if m.stats.ChatFormat != "" {
-		b.WriteString(fmt.Sprintf("chat format: %s  ctx slot: %d\n", m.stats.ChatFormat, m.stats.CtxSlotSize))
+		fields = append(fields, statusField{
+			label: "Context",
+			value: fmt.Sprintf("chat format %s  ctx slot %d", m.stats.ChatFormat, m.stats.CtxSlotSize),
+		})
 	}
+	b.WriteString(renderStatusFields(fields))
 	b.WriteString(renderHistorySummary(m.historySummary))
 	if m.stats.LastError != "" {
 		b.WriteString(errStyle.Render("last error: " + m.stats.LastError))
@@ -373,29 +416,56 @@ func renderHistorySummary(summary history.ProfileSummary) string {
 	if summary.ProfileName == "" {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("history: %d run(s)\n", summary.RunCount))
+	fields := []statusField{
+		{label: "History", value: fmt.Sprintf("%d run(s)", summary.RunCount)},
+	}
 	if summary.GenerationSpeed.Count > 0 {
-		b.WriteString(fmt.Sprintf(
-			"gen tok/s latest %.2f  avg %.2f  median %.2f  range %.2f..%.2f  %s\n",
-			summary.GenerationSpeed.Latest,
-			summary.GenerationSpeed.Average,
-			summary.GenerationSpeed.Median,
-			summary.GenerationSpeed.Min,
-			summary.GenerationSpeed.Max,
-			history.Sparkline(summary.GenerationSpeed.Series),
-		))
+		fields = append(fields, statusField{
+			label: "Gen tok/s",
+			value: fmt.Sprintf(
+				"latest %.2f  avg %.2f  median %.2f  range %.2f..%.2f  %s",
+				summary.GenerationSpeed.Latest,
+				summary.GenerationSpeed.Average,
+				summary.GenerationSpeed.Median,
+				summary.GenerationSpeed.Min,
+				summary.GenerationSpeed.Max,
+				history.Sparkline(summary.GenerationSpeed.Series),
+			),
+		})
 	}
 	if summary.PromptSpeed.Count > 0 {
-		b.WriteString(fmt.Sprintf(
-			"ingest tok/s latest %.2f  avg %.2f  median %.2f  range %.2f..%.2f  %s\n",
-			summary.PromptSpeed.Latest,
-			summary.PromptSpeed.Average,
-			summary.PromptSpeed.Median,
-			summary.PromptSpeed.Min,
-			summary.PromptSpeed.Max,
-			history.Sparkline(summary.PromptSpeed.Series),
-		))
+		fields = append(fields, statusField{
+			label: "Ingest tok/s",
+			value: fmt.Sprintf(
+				"latest %.2f  avg %.2f  median %.2f  range %.2f..%.2f  %s",
+				summary.PromptSpeed.Latest,
+				summary.PromptSpeed.Average,
+				summary.PromptSpeed.Median,
+				summary.PromptSpeed.Min,
+				summary.PromptSpeed.Max,
+				history.Sparkline(summary.PromptSpeed.Series),
+			),
+		})
+	}
+	return renderStatusFields(fields)
+}
+
+func renderStatusFields(fields []statusField) string {
+	if len(fields) == 0 {
+		return ""
+	}
+	maxLabelWidth := 0
+	for _, field := range fields {
+		if len(field.label) > maxLabelWidth {
+			maxLabelWidth = len(field.label)
+		}
+	}
+	var b strings.Builder
+	for _, field := range fields {
+		if strings.TrimSpace(field.value) == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("%-*s: %s\n", maxLabelWidth, field.label, field.value))
 	}
 	return b.String()
 }

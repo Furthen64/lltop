@@ -16,6 +16,7 @@ batch = 512
 ubatch = 256
 parallel = 1
 threads = 0
+flash_attn = "auto"
 jinja = true
 metrics = true
 no_mmap = true
