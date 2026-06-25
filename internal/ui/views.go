@@ -17,6 +17,17 @@ type statusField struct {
 	value string
 }
 
+type mainLayoutSpec struct {
+	stacked   bool
+	topH      int
+	statusH   int
+	keysH     int
+	leftW     int
+	rightW    int
+	profilesH int
+	logsH     int
+}
+
 func (m *Model) View() string {
 	width := m.width
 	if width <= 0 {
@@ -31,20 +42,21 @@ func (m *Model) View() string {
 	}
 
 	statusBar := m.renderStatusBar(width)
-	topH, statusH, keysH := layoutHeights(height-1, m.showHelp)
-	leftW := max(24, int(float64(width)*0.30))
-	rightW := max(40, width-leftW)
+	layout := computeMainLayout(width, height-1, m.showHelp)
 
-	profilesPanel := panelStyle.Width(leftW - 2).Height(topH - 2).Render(m.renderProfiles())
-	logsPanel := panelStyle.Width(rightW - 2).Height(topH - 2).Render(m.renderLogs())
+	profilesPanel := panelStyle.Width(max(1, layout.leftW-2)).Height(max(1, layout.profilesH-2)).Render(m.renderProfiles())
+	logsPanel := panelStyle.Width(max(1, layout.rightW-2)).Height(max(1, layout.logsH-2)).Render(m.renderLogs())
 	top := lipgloss.JoinHorizontal(lipgloss.Top, profilesPanel, logsPanel)
+	if layout.stacked {
+		top = lipgloss.JoinVertical(lipgloss.Left, profilesPanel, logsPanel)
+	}
 
-	status := panelStyle.Width(width - 2).Height(statusH - 2).Render(m.renderStatus())
+	status := panelStyle.Width(max(1, width-2)).Height(max(1, layout.statusH-2)).Render(m.renderStatus())
 	bottomContent := m.renderKeys()
 	if m.confirmMode {
 		bottomContent = titleStyle.Render("confirm") + "\n\n" + m.confirmPrompt
 	}
-	bottom := panelStyle.Width(width - 2).Height(keysH - 2).Render(bottomContent)
+	bottom := panelStyle.Width(max(1, width-2)).Height(max(1, layout.keysH-2)).Render(bottomContent)
 
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, top, status, bottom)
 }
@@ -52,19 +64,18 @@ func (m *Model) View() string {
 func (m *Model) renderNotesView(width, height int) string {
 	statusBar := m.renderStatusBar(width)
 	topH, statusH, keysH := layoutHeights(height-1, m.showHelp)
-	leftW := max(28, int(float64(width)*0.35))
-	rightW := max(40, width-leftW)
+	leftW, rightW := splitColumns(width, 0.35, 28, 40)
 
-	runsPanel := panelStyle.Width(leftW - 2).Height(topH - 2).Render(m.renderNoteRuns())
-	notePanel := panelStyle.Width(rightW - 2).Height(topH - 2).Render(m.renderNoteContent())
+	runsPanel := panelStyle.Width(max(1, leftW-2)).Height(max(1, topH-2)).Render(m.renderNoteRuns())
+	notePanel := panelStyle.Width(max(1, rightW-2)).Height(max(1, topH-2)).Render(m.renderNoteContent())
 	top := lipgloss.JoinHorizontal(lipgloss.Top, runsPanel, notePanel)
 
-	status := panelStyle.Width(width - 2).Height(statusH - 2).Render(m.renderNoteStatus())
+	status := panelStyle.Width(max(1, width-2)).Height(max(1, statusH-2)).Render(m.renderNoteStatus())
 	bottomContent := m.renderKeys()
 	if m.confirmMode {
 		bottomContent = titleStyle.Render("confirm") + "\n\n" + m.confirmPrompt
 	}
-	bottom := panelStyle.Width(width - 2).Height(keysH - 2).Render(bottomContent)
+	bottom := panelStyle.Width(max(1, width-2)).Height(max(1, keysH-2)).Render(bottomContent)
 
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, top, status, bottom)
 }
@@ -471,6 +482,21 @@ func renderStatusFields(fields []statusField) string {
 }
 
 func layoutHeights(height int, showHelp bool) (topH, statusH, keysH int) {
+	if height <= 0 {
+		return 1, 1, 1
+	}
+	if height <= 12 {
+		keysMin := 3
+		if showHelp {
+			keysMin = 4
+		}
+		topH = max(4, height-4)
+		keysH = min(keysMin, max(1, height-topH-1))
+		statusH = max(1, height-topH-keysH)
+		keysH = max(1, height-topH-statusH)
+		return topH, statusH, keysH
+	}
+
 	topH = max(8, int(float64(height)*0.60))
 	statusH = max(6, int(float64(height)*0.25))
 	keysH = max(4, height-topH-statusH)
@@ -487,6 +513,55 @@ func layoutHeights(height int, showHelp bool) (topH, statusH, keysH int) {
 	topH -= reduceTop
 
 	return topH, statusH, height - topH - statusH
+}
+
+func computeMainLayout(width, height int, showHelp bool) mainLayoutSpec {
+	topH, statusH, keysH := layoutHeights(height, showHelp)
+	leftW, rightW := splitColumns(width, 0.30, 24, 40)
+
+	layout := mainLayoutSpec{
+		topH:    topH,
+		statusH: statusH,
+		keysH:   keysH,
+		leftW:   leftW,
+		rightW:  rightW,
+		logsH:   topH,
+	}
+
+	if width >= 84 {
+		layout.profilesH = topH
+		return layout
+	}
+
+	layout.stacked = true
+	layout.leftW = width
+	layout.rightW = width
+	layout.profilesH = min(max(6, topH/3), max(6, topH-6))
+	layout.logsH = max(6, topH-layout.profilesH)
+	layout.profilesH = max(4, topH-layout.logsH)
+	return layout
+}
+
+func splitColumns(width int, leftRatio float64, leftMin, rightMin int) (leftW, rightW int) {
+	if width <= 1 {
+		return 1, 1
+	}
+
+	leftW = int(float64(width) * leftRatio)
+	leftW = max(1, leftW)
+	rightW = width - leftW
+
+	if width >= leftMin+rightMin {
+		leftW = max(leftMin, leftW)
+		rightW = max(rightMin, width-leftW)
+		leftW = width - rightW
+		return max(1, leftW), max(1, rightW)
+	}
+
+	rightTarget := max(width/2, width-leftMin)
+	rightW = min(width-1, max(1, rightTarget))
+	leftW = max(1, width-rightW)
+	return leftW, rightW
 }
 
 func colorizeLogLine(line string) string {

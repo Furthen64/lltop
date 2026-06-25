@@ -85,6 +85,34 @@ func TestLayoutHeights_ExpandsHelpArea(t *testing.T) {
 	}
 }
 
+func TestLayoutHeights_CompactHeightStillFillsSpace(t *testing.T) {
+	topH, statusH, keysH := layoutHeights(10, false)
+
+	if topH+statusH+keysH != 10 {
+		t.Fatalf("expected compact layout to fill height, got %d", topH+statusH+keysH)
+	}
+	if topH < statusH || topH < keysH {
+		t.Fatalf("expected top area to remain dominant, got top=%d status=%d keys=%d", topH, statusH, keysH)
+	}
+}
+
+func TestComputeMainLayout_StacksWhenTerminalIsNarrow(t *testing.T) {
+	layout := computeMainLayout(72, 24, false)
+
+	if !layout.stacked {
+		t.Fatal("expected narrow layout to stack panels vertically")
+	}
+	if layout.leftW != 72 || layout.rightW != 72 {
+		t.Fatalf("expected stacked layout to use full width, got left=%d right=%d", layout.leftW, layout.rightW)
+	}
+	if layout.profilesH+layout.logsH != layout.topH {
+		t.Fatalf("expected stacked top sections to fill top height, got profiles=%d logs=%d top=%d", layout.profilesH, layout.logsH, layout.topH)
+	}
+	if layout.logsH < layout.profilesH {
+		t.Fatalf("expected logs to keep at least as much height as profiles, got profiles=%d logs=%d", layout.profilesH, layout.logsH)
+	}
+}
+
 func TestRenderStatusShowsLaunchCommand(t *testing.T) {
 	m := NewModel(testGlobalConfig(), nil, "")
 	profile := testProfile()

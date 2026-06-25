@@ -590,13 +590,11 @@ func (m *Model) updateLayout() {
 	if height <= 0 {
 		height = 40
 	}
-	topH, _, _ := layoutHeights(height, m.showHelp)
-	leftW := max(24, int(float64(width)*0.30))
-	rightW := max(40, width-leftW)
-	m.logViewport.Width = max(1, rightW-6)
-	m.logViewport.Height = max(1, topH-6)
-	noteLeftW := max(28, int(float64(width)*0.35))
-	noteRightW := max(40, width-noteLeftW)
+	layout := computeMainLayout(width, height-1, m.showHelp)
+	m.logViewport.Width = max(1, layout.rightW-6)
+	m.logViewport.Height = max(1, layout.logsH-6)
+	topH, _, _ := layoutHeights(height-1, m.showHelp)
+	_, noteRightW := splitColumns(width, 0.35, 28, 40)
 	m.noteViewport.Width = max(1, noteRightW-6)
 	m.noteViewport.Height = max(1, topH-6)
 	m.refreshViewport()
