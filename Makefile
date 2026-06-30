@@ -1,4 +1,4 @@
-.PHONY: all build clean run install deps tidy help
+.PHONY: all build clean run install deps tidy checkreqs help
 
 help:
 	@echo "Usage: make <target>"
@@ -10,6 +10,7 @@ help:
 	@echo "  install - Install lltop to ~/.local/bin"
 	@echo "  deps    - Download Go dependencies"
 	@echo "  tidy    - Run go mod tidy"
+	@echo "  checkreqs - Check whether the local Go build environment is ready"
 	@echo "  help    - Show this help message"
 
 all: build
@@ -32,3 +33,6 @@ deps:
 
 tidy:
 	go mod tidy
+
+checkreqs:
+	./checkreqs.sh
