@@ -34,6 +34,8 @@ type RunRecord struct {
 	Parallel               int       `json:"parallel"`
 	Threads                int       `json:"threads"`
 	FlashAttn              string    `json:"flash_attn"`
+	Reasoning              string    `json:"reasoning"`
+	ReasoningBudget        int       `json:"reasoning_budget"`
 	Metrics                bool      `json:"metrics"`
 	Jinja                  bool      `json:"jinja"`
 	NoMmap                 bool      `json:"no_mmap"`
@@ -110,6 +112,8 @@ func NewRunRecord(cfg *config.GlobalConfig, profile *config.Profile, command str
 		Parallel:               p.Parallel,
 		Threads:                p.Threads,
 		FlashAttn:              p.FlashAttn,
+		Reasoning:              p.Reasoning,
+		ReasoningBudget:        p.ReasoningBudget,
 		Metrics:                p.Metrics,
 		Jinja:                  p.Jinja,
 		NoMmap:                 p.NoMmap,

@@ -228,6 +228,7 @@ func (m *Model) renderStatus() string {
 			statusField{label: "Model", value: profile.Model},
 			statusField{label: "Bind", value: fmt.Sprintf("%s:%d", profile.Host, profile.Port)},
 			statusField{label: "FlashAttn", value: profile.FlashAttn},
+			statusField{label: "Reasoning", value: fmt.Sprintf("%s (%d)", profile.Reasoning, profile.ReasoningBudget)},
 		)
 	}
 	status := runner.StatusStopped

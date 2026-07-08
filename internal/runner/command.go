@@ -62,6 +62,10 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 	if p.Jinja {
 		args = append(args, "--jinja")
 	}
+	args = append(args,
+		"--reasoning", p.Reasoning,
+		"--reasoning-budget", strconv.Itoa(p.ReasoningBudget),
+	)
 	if p.NoMmap {
 		args = append(args, "--no-mmap")
 	}

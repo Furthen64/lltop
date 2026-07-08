@@ -20,7 +20,7 @@ func TestBuildCommandIncludesChatTemplateAfterJinja(t *testing.T) {
 	}
 
 	got := strings.Join(spec.Args, " ")
-	want := "--jinja --no-mmap --chat-template chatml"
+	want := "--jinja --reasoning auto --reasoning-budget -1 --no-mmap --chat-template chatml"
 	if !strings.Contains(got, want) {
 		t.Fatalf("expected args to contain %q in order, got %q", want, got)
 	}
@@ -110,5 +110,46 @@ func TestBuildCommandPrefersProfileFlashAttnOverExtraArgs(t *testing.T) {
 	}
 	if !strings.Contains(got, "--prio 2") {
 		t.Fatalf("expected unrelated extra args to remain, got %q", got)
+	}
+}
+
+func TestBuildCommandIncludesReasoningFlags(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.LlamaServer = "/usr/bin/llama-server"
+	profile := config.DefaultProfile(cfg, "reasoning")
+	profile.Model = "/models/qwen.gguf"
+	profile.Reasoning = "on"
+	profile.ReasoningBudget = 512
+
+	spec, err := BuildCommand(cfg, profile)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	got := strings.Join(spec.Args, " ")
+	if !strings.Contains(got, "--reasoning on --reasoning-budget 512") {
+		t.Fatalf("expected reasoning flags in args, got %q", got)
+	}
+}
+
+func TestBuildCommandPreservesExplicitZeroMinPAndReasoningBudget(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.LlamaServer = "/usr/bin/llama-server"
+	profile := config.DefaultProfile(cfg, "zeroes")
+	profile.Model = "/models/qwen.gguf"
+	profile.MinP = 0
+	profile.ReasoningBudget = 0
+
+	spec, err := BuildCommand(cfg, profile)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	got := strings.Join(spec.Args, " ")
+	if !strings.Contains(got, "--min-p 0") {
+		t.Fatalf("expected explicit min_p=0 to remain in args, got %q", got)
+	}
+	if !strings.Contains(got, "--reasoning-budget 0") {
+		t.Fatalf("expected explicit reasoning_budget=0 to remain in args, got %q", got)
 	}
 }

@@ -220,6 +220,8 @@ jinja = true
 metrics = true
 no_mmap = true
 chat_template = "chatml"
+reasoning = "auto"
+reasoning_budget = -1
 extra_args = []
 ```
 
@@ -231,13 +233,15 @@ Profiles are translated into a `llama-server` command. For example, the profile
 above generates arguments like:
 
 ```bash
-llama-server -m /path/to/model.gguf --host 0.0.0.0 --port 8080 -a qwen -c 65536 -ngl 999 --cache-type-k q4_0 --cache-type-v q4_0 --flash-attn auto --temp 0.1 --top-p 0.95 --top-k 40 --min-p 0.05 -b 512 -ub 256 --parallel 1 --metrics --jinja --no-mmap --chat-template chatml
+llama-server -m /path/to/model.gguf --host 0.0.0.0 --port 8080 -a qwen -c 65536 -ngl 999 --cache-type-k q4_0 --cache-type-v q4_0 --flash-attn auto --temp 0.1 --top-p 0.95 --top-k 40 --min-p 0.05 -b 512 -ub 256 --parallel 1 --metrics --jinja --reasoning auto --reasoning-budget -1 --no-mmap --chat-template chatml
 ```
 
-`threads = 0` means `--threads` is omitted. `flash_attn` accepts `auto`, `on`,
-or `off` and defaults to `auto`. Any values in `extra_args` are appended after
-the generated arguments, except conflicting `-fa` or `--flash-attn` entries,
-which are ignored in favor of the first-class `flash_attn` field.
+`threads = 0` means `--threads` is omitted. `flash_attn` and `reasoning`
+accept `auto`, `on`, or `off`. `reasoning_budget = -1` leaves thinking
+unrestricted, while `0` is preserved as an explicit immediate stop. Any values
+in `extra_args` are appended after the generated arguments, except conflicting
+`-fa` or `--flash-attn` entries, which are ignored in favor of the first-class
+`flash_attn` field.
 
 ## Run History
 

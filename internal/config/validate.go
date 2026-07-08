@@ -13,8 +13,19 @@ var validFlashAttnValues = map[string]struct{}{
 	"off":  {},
 }
 
+var validReasoningValues = map[string]struct{}{
+	"auto": {},
+	"on":   {},
+	"off":  {},
+}
+
 func IsValidFlashAttnValue(value string) bool {
 	_, ok := validFlashAttnValues[strings.ToLower(value)]
+	return ok
+}
+
+func IsValidReasoningValue(value string) bool {
+	_, ok := validReasoningValues[strings.ToLower(value)]
 	return ok
 }
 
@@ -37,6 +48,12 @@ func ValidateProfileConfig(p *Profile) error {
 	}
 	if !IsValidFlashAttnValue(p.FlashAttn) {
 		return fmt.Errorf("flash_attn must be one of: auto, on, off")
+	}
+	if !IsValidReasoningValue(p.Reasoning) {
+		return fmt.Errorf("reasoning must be one of: auto, on, off")
+	}
+	if p.ReasoningBudget < -1 {
+		return fmt.Errorf("reasoning_budget must be -1 or greater")
 	}
 	return nil
 }

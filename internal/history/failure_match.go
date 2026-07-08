@@ -9,32 +9,36 @@ import (
 )
 
 type ScenarioKey struct {
-	ProfileName string
-	Model       string
-	Ctx         int
-	NGL         int
-	CacheK      string
-	CacheV      string
-	Batch       int
-	UBatch      int
-	Parallel    int
-	NoMmap      bool
-	ExtraArgs   string
+	ProfileName     string
+	Model           string
+	Ctx             int
+	NGL             int
+	CacheK          string
+	CacheV          string
+	Batch           int
+	UBatch          int
+	Parallel        int
+	Reasoning       string
+	ReasoningBudget int
+	NoMmap          bool
+	ExtraArgs       string
 }
 
 func BuildScenarioKey(p *config.Profile) ScenarioKey {
 	return ScenarioKey{
-		ProfileName: p.Name,
-		Model:       p.Model,
-		Ctx:         p.Ctx,
-		NGL:         p.NGL,
-		CacheK:      p.CacheK,
-		CacheV:      p.CacheV,
-		Batch:       p.Batch,
-		UBatch:      p.UBatch,
-		Parallel:    p.Parallel,
-		NoMmap:      p.NoMmap,
-		ExtraArgs:   strings.Join(p.ExtraArgs, "\x00"),
+		ProfileName:     p.Name,
+		Model:           p.Model,
+		Ctx:             p.Ctx,
+		NGL:             p.NGL,
+		CacheK:          p.CacheK,
+		CacheV:          p.CacheV,
+		Batch:           p.Batch,
+		UBatch:          p.UBatch,
+		Parallel:        p.Parallel,
+		Reasoning:       p.Reasoning,
+		ReasoningBudget: p.ReasoningBudget,
+		NoMmap:          p.NoMmap,
+		ExtraArgs:       strings.Join(p.ExtraArgs, "\x00"),
 	}
 }
 
@@ -75,6 +79,8 @@ func matchesScenario(record *RunRecord, key ScenarioKey) bool {
 		record.Batch == key.Batch &&
 		record.UBatch == key.UBatch &&
 		record.Parallel == key.Parallel &&
+		record.Reasoning == key.Reasoning &&
+		record.ReasoningBudget == key.ReasoningBudget &&
 		record.NoMmap == key.NoMmap &&
 		strings.Join(record.ExtraArgs, "\x00") == key.ExtraArgs
 }

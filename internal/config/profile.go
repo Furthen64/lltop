@@ -11,31 +11,36 @@ import (
 )
 
 type Profile struct {
-	Name         string   `toml:"name"`
-	Description  string   `toml:"description"`
-	LlamaServer  string   `toml:"llama_server"`
-	Model        string   `toml:"model"`
-	Host         string   `toml:"host"`
-	Port         int      `toml:"port"`
-	Alias        string   `toml:"alias"`
-	Ctx          int      `toml:"ctx"`
-	NGL          int      `toml:"ngl"`
-	CacheK       string   `toml:"cache_k"`
-	CacheV       string   `toml:"cache_v"`
-	Temp         float64  `toml:"temp"`
-	TopP         float64  `toml:"top_p"`
-	TopK         int      `toml:"top_k"`
-	MinP         float64  `toml:"min_p"`
-	Batch        int      `toml:"batch"`
-	UBatch       int      `toml:"ubatch"`
-	Parallel     int      `toml:"parallel"`
-	Threads      int      `toml:"threads"`
-	FlashAttn    string   `toml:"flash_attn"`
-	Jinja        bool     `toml:"jinja"`
-	Metrics      bool     `toml:"metrics"`
-	NoMmap       bool     `toml:"no_mmap"`
-	ChatTemplate string   `toml:"chat_template"`
-	ExtraArgs    []string `toml:"extra_args"`
+	Name            string   `toml:"name"`
+	Description     string   `toml:"description"`
+	LlamaServer     string   `toml:"llama_server"`
+	Model           string   `toml:"model"`
+	Host            string   `toml:"host"`
+	Port            int      `toml:"port"`
+	Alias           string   `toml:"alias"`
+	Ctx             int      `toml:"ctx"`
+	NGL             int      `toml:"ngl"`
+	CacheK          string   `toml:"cache_k"`
+	CacheV          string   `toml:"cache_v"`
+	Temp            float64  `toml:"temp"`
+	TopP            float64  `toml:"top_p"`
+	TopK            int      `toml:"top_k"`
+	MinP            float64  `toml:"min_p"`
+	Batch           int      `toml:"batch"`
+	UBatch          int      `toml:"ubatch"`
+	Parallel        int      `toml:"parallel"`
+	Threads         int      `toml:"threads"`
+	FlashAttn       string   `toml:"flash_attn"`
+	Jinja           bool     `toml:"jinja"`
+	Metrics         bool     `toml:"metrics"`
+	NoMmap          bool     `toml:"no_mmap"`
+	ChatTemplate    string   `toml:"chat_template"`
+	ExtraArgs       []string `toml:"extra_args"`
+	Reasoning       string   `toml:"reasoning"`
+	ReasoningBudget int      `toml:"reasoning_budget"`
+
+	hasMinP            bool `toml:"-"`
+	hasReasoningBudget bool `toml:"-"`
 }
 
 func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
@@ -52,30 +57,34 @@ func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
 		llamaServer = cfg.LlamaServer
 	}
 	return &Profile{
-		Name:         name,
-		Description:  "",
-		LlamaServer:  llamaServer,
-		Host:         host,
-		Port:         port,
-		Alias:        "",
-		Ctx:          65536,
-		NGL:          99,
-		CacheK:       "q4_0",
-		CacheV:       "q4_0",
-		Temp:         0.1,
-		TopP:         0.95,
-		TopK:         40,
-		MinP:         0.05,
-		Batch:        512,
-		UBatch:       256,
-		Parallel:     1,
-		Threads:      0,
-		FlashAttn:    "auto",
-		Jinja:        true,
-		Metrics:      true,
-		NoMmap:       true,
-		ChatTemplate: "chatml",
-		ExtraArgs:    []string{},
+		Name:               name,
+		Description:        "",
+		LlamaServer:        llamaServer,
+		Host:               host,
+		Port:               port,
+		Alias:              "",
+		Ctx:                65536,
+		NGL:                99,
+		CacheK:             "q4_0",
+		CacheV:             "q4_0",
+		Temp:               0.1,
+		TopP:               0.95,
+		TopK:               40,
+		MinP:               0.05,
+		Batch:              512,
+		UBatch:             256,
+		Parallel:           1,
+		Threads:            0,
+		FlashAttn:          "auto",
+		Jinja:              true,
+		Metrics:            true,
+		NoMmap:             true,
+		ChatTemplate:       "chatml",
+		ExtraArgs:          []string{},
+		Reasoning:          "auto",
+		ReasoningBudget:    -1,
+		hasMinP:            true,
+		hasReasoningBudget: true,
 	}
 }
 
@@ -105,7 +114,7 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	if p.TopK == 0 {
 		p.TopK = defaults.TopK
 	}
-	if p.MinP == 0 {
+	if !p.hasMinP && p.MinP == 0 {
 		p.MinP = defaults.MinP
 	}
 	if p.Batch == 0 {
@@ -120,6 +129,12 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	if p.FlashAttn == "" {
 		p.FlashAttn = defaults.FlashAttn
 	}
+	if p.Reasoning == "" {
+		p.Reasoning = defaults.Reasoning
+	}
+	if !p.hasReasoningBudget && p.ReasoningBudget == 0 {
+		p.ReasoningBudget = defaults.ReasoningBudget
+	}
 	if p.LlamaServer == "" && cfg != nil {
 		p.LlamaServer = cfg.LlamaServer
 	}
@@ -130,9 +145,12 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 
 func LoadProfile(path string) (*Profile, error) {
 	p := DefaultProfile(nil, "")
-	if _, err := toml.DecodeFile(path, p); err != nil {
+	md, err := toml.DecodeFile(path, p)
+	if err != nil {
 		return nil, err
 	}
+	p.hasMinP = md.IsDefined("min_p")
+	p.hasReasoningBudget = md.IsDefined("reasoning_budget")
 	if p.LlamaServer != "" {
 		expanded, err := ExpandPath(p.LlamaServer)
 		if err != nil {
@@ -200,6 +218,8 @@ func SaveProfile(path string, p *Profile) error {
 	fmt.Fprintf(&b, "metrics = %t\n", p.Metrics)
 	fmt.Fprintf(&b, "no_mmap = %t\n", p.NoMmap)
 	fmt.Fprintf(&b, "chat_template = %q\n", p.ChatTemplate)
+	fmt.Fprintf(&b, "reasoning = %q\n", p.Reasoning)
+	fmt.Fprintf(&b, "reasoning_budget = %d\n", p.ReasoningBudget)
 	b.WriteString("extra_args = [")
 	for i, arg := range p.ExtraArgs {
 		if i > 0 {

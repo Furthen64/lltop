@@ -21,4 +21,6 @@ jinja = true
 metrics = true
 no_mmap = true
 chat_template = "chatml"
+reasoning = "auto"
+reasoning_budget = -1
 extra_args = []

@@ -911,6 +911,8 @@ func annotationTemplate(profileName string, record *history.RunRecord) string {
 		writeAnnotationParam(&b, "threads", strconv.Itoa(record.Threads))
 	}
 	writeAnnotationParam(&b, "flash_attn", record.FlashAttn)
+	writeAnnotationParam(&b, "reasoning", record.Reasoning)
+	writeAnnotationParam(&b, "reasoning_budget", strconv.Itoa(record.ReasoningBudget))
 	writeAnnotationParam(&b, "metrics", strconv.FormatBool(record.Metrics))
 	writeAnnotationParam(&b, "jinja", strconv.FormatBool(record.Jinja))
 	writeAnnotationParam(&b, "no_mmap", strconv.FormatBool(record.NoMmap))
