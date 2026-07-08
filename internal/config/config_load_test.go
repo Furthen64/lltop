@@ -103,6 +103,69 @@ func TestLoadProfilePreservesExplicitZeroMinPAndReasoningBudget(t *testing.T) {
 	}
 }
 
+func TestLoadProfilePreservesExplicitEmptyChatTemplate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty-chat-template.toml")
+	content := strings.Join([]string{
+		`name = "empty-chat-template"`,
+		`model = "/models/qwen.gguf"`,
+		`host = "0.0.0.0"`,
+		`port = 8080`,
+		`chat_template = ""`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+
+	profile, err := LoadProfile(path)
+	if err != nil {
+		t.Fatalf("LoadProfile failed: %v", err)
+	}
+	profile.ApplyDefaults(nil)
+	if profile.ChatTemplate != "" {
+		t.Fatalf("expected explicit empty chat_template to survive defaults, got %q", profile.ChatTemplate)
+	}
+}
+
+func TestLoadProfilePreservesExplicitEmptyOptionalStrings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty-strings.toml")
+	content := strings.Join([]string{
+		`name = "empty-strings"`,
+		`model = "/models/qwen.gguf"`,
+		`host = ""`,
+		`port = 8080`,
+		`cache_k = ""`,
+		`cache_v = ""`,
+		`flash_attn = ""`,
+		`reasoning = ""`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+
+	profile, err := LoadProfile(path)
+	if err != nil {
+		t.Fatalf("LoadProfile failed: %v", err)
+	}
+	profile.ApplyDefaults(nil)
+	if profile.Host != "" {
+		t.Fatalf("expected explicit empty host to survive defaults, got %q", profile.Host)
+	}
+	if profile.CacheK != "" {
+		t.Fatalf("expected explicit empty cache_k to survive defaults, got %q", profile.CacheK)
+	}
+	if profile.CacheV != "" {
+		t.Fatalf("expected explicit empty cache_v to survive defaults, got %q", profile.CacheV)
+	}
+	if profile.FlashAttn != "" {
+		t.Fatalf("expected explicit empty flash_attn to survive defaults, got %q", profile.FlashAttn)
+	}
+	if profile.Reasoning != "" {
+		t.Fatalf("expected explicit empty reasoning to survive defaults, got %q", profile.Reasoning)
+	}
+}
+
 func TestLoadProfileRejectsInvalidFlashAttnValue(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "invalid.toml")

@@ -33,8 +33,10 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 
 	args := []string{
 		"-m", p.Model,
-		"--host", p.Host,
 		"--port", strconv.Itoa(p.Port),
+	}
+	if p.Host != "" {
+		args = append(args, "--host", p.Host)
 	}
 	if p.Alias != "" {
 		args = append(args, "-a", p.Alias)
@@ -42,9 +44,17 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 	args = append(args,
 		"-c", strconv.Itoa(p.Ctx),
 		"-ngl", strconv.Itoa(p.NGL),
-		"--cache-type-k", p.CacheK,
-		"--cache-type-v", p.CacheV,
-		"--flash-attn", p.FlashAttn,
+	)
+	if p.CacheK != "" {
+		args = append(args, "--cache-type-k", p.CacheK)
+	}
+	if p.CacheV != "" {
+		args = append(args, "--cache-type-v", p.CacheV)
+	}
+	if p.FlashAttn != "" {
+		args = append(args, "--flash-attn", p.FlashAttn)
+	}
+	args = append(args,
 		"--temp", formatFloat(p.Temp),
 		"--top-p", formatFloat(p.TopP),
 		"--top-k", strconv.Itoa(p.TopK),
@@ -62,10 +72,10 @@ func BuildCommand(cfg *config.GlobalConfig, profile *config.Profile) (CommandSpe
 	if p.Jinja {
 		args = append(args, "--jinja")
 	}
-	args = append(args,
-		"--reasoning", p.Reasoning,
-		"--reasoning-budget", strconv.Itoa(p.ReasoningBudget),
-	)
+	if p.Reasoning != "" {
+		args = append(args, "--reasoning", p.Reasoning)
+	}
+	args = append(args, "--reasoning-budget", strconv.Itoa(p.ReasoningBudget))
 	if p.NoMmap {
 		args = append(args, "--no-mmap")
 	}

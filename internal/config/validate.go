@@ -46,10 +46,10 @@ func ValidateProfileConfig(p *Profile) error {
 	if p.Port < 1 || p.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
-	if !IsValidFlashAttnValue(p.FlashAttn) {
+	if p.FlashAttn != "" && !IsValidFlashAttnValue(p.FlashAttn) {
 		return fmt.Errorf("flash_attn must be one of: auto, on, off")
 	}
-	if !IsValidReasoningValue(p.Reasoning) {
+	if p.Reasoning != "" && !IsValidReasoningValue(p.Reasoning) {
 		return fmt.Errorf("reasoning must be one of: auto, on, off")
 	}
 	if p.ReasoningBudget < -1 {

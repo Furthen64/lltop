@@ -73,9 +73,10 @@ func TestBuildCommandIncludesFlashAttnAfterCacheFlags(t *testing.T) {
 func TestBuildCommandDefaultsFlashAttnToAuto(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	cfg.LlamaServer = "/usr/bin/llama-server"
-	profile := config.DefaultProfile(cfg, "default-flash-attn")
-	profile.Model = "/models/qwen.gguf"
-	profile.FlashAttn = ""
+	profile := &config.Profile{
+		Name:  "default-flash-attn",
+		Model: "/models/qwen.gguf",
+	}
 
 	spec, err := BuildCommand(cfg, profile)
 	if err != nil {
@@ -129,6 +130,57 @@ func TestBuildCommandIncludesReasoningFlags(t *testing.T) {
 	got := strings.Join(spec.Args, " ")
 	if !strings.Contains(got, "--reasoning on --reasoning-budget 512") {
 		t.Fatalf("expected reasoning flags in args, got %q", got)
+	}
+}
+
+func TestBuildCommandOmitsChatTemplateWhenExplicitlyEmpty(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.LlamaServer = "/usr/bin/llama-server"
+	profile := config.DefaultProfile(cfg, "no-chat-template")
+	profile.Model = "/models/qwen.gguf"
+	profile.ChatTemplate = ""
+
+	spec, err := BuildCommand(cfg, profile)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	got := strings.Join(spec.Args, " ")
+	if strings.Contains(got, "--chat-template") {
+		t.Fatalf("expected chat template flag to be omitted, got %q", got)
+	}
+}
+
+func TestBuildCommandOmitsEmptyOptionalStringFlags(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.LlamaServer = "/usr/bin/llama-server"
+	profile := config.DefaultProfile(cfg, "omit-empty-strings")
+	profile.Model = "/models/qwen.gguf"
+	profile.Host = ""
+	profile.CacheK = ""
+	profile.CacheV = ""
+	profile.FlashAttn = ""
+	profile.Reasoning = ""
+
+	spec, err := BuildCommand(cfg, profile)
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+
+	got := strings.Join(spec.Args, " ")
+	for _, forbidden := range []string{
+		"--host",
+		"--cache-type-k",
+		"--cache-type-v",
+		"--flash-attn",
+		"--reasoning ",
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("expected %q to be omitted, got %q", forbidden, got)
+		}
+	}
+	if !strings.Contains(got, "--reasoning-budget -1") {
+		t.Fatalf("expected reasoning budget to remain explicit, got %q", got)
 	}
 }
 

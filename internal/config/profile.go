@@ -39,8 +39,14 @@ type Profile struct {
 	Reasoning       string   `toml:"reasoning"`
 	ReasoningBudget int      `toml:"reasoning_budget"`
 
+	hasHost            bool `toml:"-"`
+	hasCacheK          bool `toml:"-"`
+	hasCacheV          bool `toml:"-"`
+	hasFlashAttn       bool `toml:"-"`
+	hasReasoning       bool `toml:"-"`
 	hasMinP            bool `toml:"-"`
 	hasReasoningBudget bool `toml:"-"`
+	hasChatTemplate    bool `toml:"-"`
 }
 
 func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
@@ -83,14 +89,20 @@ func DefaultProfile(cfg *GlobalConfig, name string) *Profile {
 		ExtraArgs:          []string{},
 		Reasoning:          "auto",
 		ReasoningBudget:    -1,
+		hasHost:            true,
+		hasCacheK:          true,
+		hasCacheV:          true,
+		hasFlashAttn:       true,
+		hasReasoning:       true,
 		hasMinP:            true,
 		hasReasoningBudget: true,
+		hasChatTemplate:    true,
 	}
 }
 
 func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	defaults := DefaultProfile(cfg, p.Name)
-	if p.Host == "" {
+	if !p.hasHost && p.Host == "" {
 		p.Host = defaults.Host
 	}
 	if p.Port == 0 {
@@ -99,10 +111,10 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	if p.Ctx == 0 {
 		p.Ctx = defaults.Ctx
 	}
-	if p.CacheK == "" {
+	if !p.hasCacheK && p.CacheK == "" {
 		p.CacheK = defaults.CacheK
 	}
-	if p.CacheV == "" {
+	if !p.hasCacheV && p.CacheV == "" {
 		p.CacheV = defaults.CacheV
 	}
 	if p.Temp == 0 {
@@ -126,10 +138,10 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	if p.Parallel == 0 {
 		p.Parallel = defaults.Parallel
 	}
-	if p.FlashAttn == "" {
+	if !p.hasFlashAttn && p.FlashAttn == "" {
 		p.FlashAttn = defaults.FlashAttn
 	}
-	if p.Reasoning == "" {
+	if !p.hasReasoning && p.Reasoning == "" {
 		p.Reasoning = defaults.Reasoning
 	}
 	if !p.hasReasoningBudget && p.ReasoningBudget == 0 {
@@ -138,7 +150,7 @@ func (p *Profile) ApplyDefaults(cfg *GlobalConfig) {
 	if p.LlamaServer == "" && cfg != nil {
 		p.LlamaServer = cfg.LlamaServer
 	}
-	if p.ChatTemplate == "" {
+	if !p.hasChatTemplate && p.ChatTemplate == "" {
 		p.ChatTemplate = defaults.ChatTemplate
 	}
 }
@@ -149,8 +161,14 @@ func LoadProfile(path string) (*Profile, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.hasHost = md.IsDefined("host")
+	p.hasCacheK = md.IsDefined("cache_k")
+	p.hasCacheV = md.IsDefined("cache_v")
+	p.hasFlashAttn = md.IsDefined("flash_attn")
+	p.hasReasoning = md.IsDefined("reasoning")
 	p.hasMinP = md.IsDefined("min_p")
 	p.hasReasoningBudget = md.IsDefined("reasoning_budget")
+	p.hasChatTemplate = md.IsDefined("chat_template")
 	if p.LlamaServer != "" {
 		expanded, err := ExpandPath(p.LlamaServer)
 		if err != nil {
