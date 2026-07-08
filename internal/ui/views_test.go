@@ -9,6 +9,7 @@ import (
 
 	"github.com/Furthen64/lltop/internal/config"
 	"github.com/Furthen64/lltop/internal/history"
+	"github.com/Furthen64/lltop/internal/runner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -255,7 +256,7 @@ func TestRenderProfilesShowsRunningIconForActiveProfile(t *testing.T) {
 	profile := testProfile()
 	m.profiles = []*config.Profile{profile}
 	m.runner.Profile = profile
-	m.runner.Status = "running"
+	m.runner.Status = runner.StatusRunning
 
 	profiles := m.renderProfiles()
 	if !strings.Contains(profiles, "🔵 qwen") {

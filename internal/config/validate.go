@@ -64,9 +64,6 @@ func ValidateLaunchProfile(cfg *GlobalConfig, p *Profile) error {
 	if _, err := os.Stat(p.Model); err != nil {
 		return fmt.Errorf("model not found: %w", err)
 	}
-	if p.Port < 1 || p.Port > 65535 {
-		return fmt.Errorf("port must be between 1 and 65535")
-	}
 	if p.Ctx <= 0 {
 		return fmt.Errorf("ctx must be greater than 0")
 	}

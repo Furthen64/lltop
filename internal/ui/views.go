@@ -127,9 +127,9 @@ func (m *Model) renderProfiles() string {
 func (m *Model) profileRunStatusIcon(profileName string) (string, lipgloss.Style) {
 	if m.runner != nil && m.runner.Profile != nil && strings.EqualFold(m.runner.Profile.Name, profileName) {
 		switch m.runner.Status {
-		case "running":
+		case runner.StatusRunning:
 			return "🔵", runStateRunStyle
-		case "stopping":
+		case runner.StatusStopping:
 			return "🟡", runStateStopStyle
 		}
 	}
@@ -230,7 +230,7 @@ func (m *Model) renderStatus() string {
 			statusField{label: "FlashAttn", value: profile.FlashAttn},
 		)
 	}
-	status := "stopped"
+	status := runner.StatusStopped
 	pid := 0
 	externalCmd := ""
 	runnerActive := false

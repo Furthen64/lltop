@@ -14,6 +14,15 @@ import (
 	"github.com/Furthen64/lltop/internal/config"
 )
 
+const LogChBuffer = 1024
+
+const (
+	StatusStopped  = "stopped"
+	StatusRunning  = "running"
+	StatusStopping = "stopping"
+	StatusFailed   = "failed"
+)
+
 type Runner struct {
 	Profile   *config.Profile
 	PID       int
@@ -39,10 +48,10 @@ type ExitInfo struct {
 
 func New() *Runner {
 	return &Runner{
-		Status:   "stopped",
-		LogCh:    make(chan string, 1024),
+		Status:   StatusStopped,
+		LogCh:    make(chan string, LogChBuffer),
 		DoneCh:   make(chan ExitInfo, 1),
-		LogLines: make([]string, 0, 500),
+		LogLines: make([]string, 0, config.MaxLogLines),
 	}
 }
 
@@ -60,11 +69,11 @@ func (r *Runner) Launch(cfg *config.GlobalConfig, profile *config.Profile) error
 	}
 
 	r.mu.Lock()
-	if r.Status == "running" || r.Status == "stopping" {
+	if r.Status == StatusRunning || r.Status == StatusStopping {
 		r.mu.Unlock()
 		return fmt.Errorf("runner is already active")
 	}
-	r.LogCh = make(chan string, 1024)
+	r.LogCh = make(chan string, LogChBuffer)
 	r.DoneCh = make(chan ExitInfo, 1)
 	r.LogLines = r.LogLines[:0]
 	r.ExitCode = 0
@@ -99,7 +108,7 @@ func (r *Runner) Launch(cfg *config.GlobalConfig, profile *config.Profile) error
 	r.Profile = profile
 	r.PID = cmd.Process.Pid
 	r.StartTime = time.Now()
-	r.Status = "running"
+	r.Status = StatusRunning
 	r.LogFile = logFile
 	r.cmd = cmd
 	r.logPath = logPath
@@ -119,9 +128,9 @@ func (r *Runner) Launch(cfg *config.GlobalConfig, profile *config.Profile) error
 		r.mu.Lock()
 		r.ExitCode = exitCode
 		if exitCode == 0 {
-			r.Status = "stopped"
+			r.Status = StatusStopped
 		} else {
-			r.Status = "failed"
+			r.Status = StatusFailed
 		}
 		r.PID = 0
 		if r.LogFile != nil {
@@ -158,8 +167,8 @@ func (r *Runner) appendLog(line string) {
 		_, _ = r.LogFile.WriteString(line + "\n")
 	}
 	r.LogLines = append(r.LogLines, line)
-	if len(r.LogLines) > 500 {
-		r.LogLines = append([]string(nil), r.LogLines[len(r.LogLines)-500:]...)
+	if len(r.LogLines) > config.MaxLogLines {
+		r.LogLines = append([]string(nil), r.LogLines[len(r.LogLines)-config.MaxLogLines:]...)
 	}
 	select {
 	case r.LogCh <- line:
@@ -173,7 +182,7 @@ func (r *Runner) Stop() error {
 	if r.cmd == nil || r.cmd.Process == nil {
 		return fmt.Errorf("runner is not running")
 	}
-	r.Status = "stopping"
+	r.Status = StatusStopping
 	return sendInterrupt(r.cmd.Process)
 }
 
@@ -183,14 +192,14 @@ func (r *Runner) Kill() error {
 	if r.cmd == nil || r.cmd.Process == nil {
 		return fmt.Errorf("runner is not running")
 	}
-	r.Status = "stopping"
+	r.Status = StatusStopping
 	return sendKill(r.cmd.Process)
 }
 
 func (r *Runner) IsRunning() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.Status == "running" || r.Status == "stopping"
+	return r.Status == StatusRunning || r.Status == StatusStopping
 }
 
 func (r *Runner) CommandString() string {

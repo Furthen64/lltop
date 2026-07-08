@@ -10,6 +10,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const MaxLogLines = 500
+
 type GlobalConfig struct {
 	LlamaServer             string `toml:"llama_server"`
 	ModelsDir               string `toml:"models_dir"`

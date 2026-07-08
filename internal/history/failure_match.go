@@ -1,6 +1,7 @@
 package history
 
 import (
+	"os"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ func BuildScenarioKey(p *config.Profile) ScenarioKey {
 func FindRecentFailure(runsDir string, key ScenarioKey, windowSeconds int, startupFailureSecs int) (*RunRecord, error) {
 	records, err := LoadRunRecords(runsDir)
 	if err != nil {
-		if strings.Contains(err.Error(), "no such file or directory") {
+		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err

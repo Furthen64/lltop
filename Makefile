@@ -1,12 +1,13 @@
-.PHONY: all build clean run install deps tidy checkreqs help
+.PHONY: all build clean factory-reset run install deps tidy checkreqs help
 
 help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  build   - Build the lltop binary"
-	@echo "  clean   - Remove built binaries"
-	@echo "  run     - Build and launch lltop"
+	@echo "  build         - Build the lltop binary"
+	@echo "  clean         - Remove built binaries"
+	@echo "  factory-reset - Remove built binaries and all user config"
+	@echo "  run           - Build and launch lltop"
 	@echo "  install - Install lltop to ~/.local/bin"
 	@echo "  deps    - Download Go dependencies"
 	@echo "  tidy    - Run go mod tidy"
@@ -20,7 +21,9 @@ build:
 
 clean:
 	rm -rf bin/
-	rm -r ~/.config/lltop
+
+factory-reset: clean
+	rm -rf ~/.config/lltop
 
 run: build
 	./bin/lltop

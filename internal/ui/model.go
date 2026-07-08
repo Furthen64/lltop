@@ -249,8 +249,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logMsg:
 		line := string(msg)
 		m.logLines = append(m.logLines, line)
-		if len(m.logLines) > 500 {
-			m.logLines = append([]string(nil), m.logLines[len(m.logLines)-500:]...)
+		if len(m.logLines) > config.MaxLogLines {
+			m.logLines = append([]string(nil), m.logLines[len(m.logLines)-config.MaxLogLines:]...)
 		}
 		m.consumeParsedLine(line)
 		m.refreshViewport()
@@ -276,8 +276,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		for _, line := range msg.lines {
 			m.logLines = append(m.logLines, line)
-			if len(m.logLines) > 500 {
-				m.logLines = append([]string(nil), m.logLines[len(m.logLines)-500:]...)
+			if len(m.logLines) > config.MaxLogLines {
+				m.logLines = append([]string(nil), m.logLines[len(m.logLines)-config.MaxLogLines:]...)
 			}
 			m.consumeParsedLine(line)
 		}
