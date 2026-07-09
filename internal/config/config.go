@@ -44,7 +44,7 @@ func ConfigPath() (string, error) {
 	return filepath.Join(root, "config.toml"), nil
 }
 
-func defaultEditor() string {
+func DefaultEditor() string {
 	if runtime.GOOS == "windows" {
 		return "notepad"
 	}
@@ -55,7 +55,7 @@ func DefaultGlobalConfig() *GlobalConfig {
 	root, _ := AppDir()
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		editor = defaultEditor()
+		editor = DefaultEditor()
 	}
 
 	return &GlobalConfig{

@@ -44,19 +44,19 @@
 
 **Fix applied:** Added `StatusStopped`, `StatusRunning`, `StatusStopping`, `StatusFailed` constants to `internal/runner/runner.go`. All references across `runner.go`, `views.go`, and `views_test.go` now use the constants instead of bare string literals.
 
-### 7. Error kind strings as bare literals
+### 7. Error kind strings as bare literals — ✅ COMPLETED
 
 **File:** `internal/parser/llama_logs.go:141-156`
 
-Values like `"cuda_oom"`, `"load_model"`, `"bind"`, `"unknown_argument"`, `"invalid_argument"`, `"open_model"` should be named constants to allow safe comparison elsewhere.
+**Fix applied:** Added `ErrorKind` type and named constants (`ErrorKindCUDAOutOfMemory`, `ErrorKindLoadModel`, `ErrorKindBind`, `ErrorKindUnknownArg`, `ErrorKindInvalidArg`, `ErrorKindOpenModel`) to `internal/parser/llama_logs.go`. All error kind assignments now use the constants.
 
-### 8. Default editor strings duplicated
+### 8. Default editor strings duplicated — ✅ COMPLETED
 
 **Files:**
 - `internal/config/config.go:47-49` -- defines `"notepad"` / `"nano"` defaults
 - `internal/ui/model.go:978-980` -- duplicates the same defaults
 
-The `openEditor` function in model.go should call `config.DefaultEditor()` instead of duplicating the logic.
+**Fix applied:** Exported `defaultEditor()` as `DefaultEditor()` in `config.go`. The `openEditor` function in `model.go` now calls `config.DefaultEditor()` instead of duplicating the OS check. Removed unused `runtime` import from `model.go`.
 
 ### 9. `"llama-server"` binary name appears in 3 files
 

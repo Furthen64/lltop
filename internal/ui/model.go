@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -976,11 +975,7 @@ func waitForExternalLog(m *Model) tea.Cmd {
 func openEditor(editor, path string) tea.Cmd {
 	parts := strings.Fields(editor)
 	if len(parts) == 0 {
-		if runtime.GOOS == "windows" {
-			parts = []string{"notepad"}
-		} else {
-			parts = []string{"nano"}
-		}
+		parts = []string{config.DefaultEditor()}
 	}
 	cmd := exec.Command(parts[0], append(parts[1:], path)...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {

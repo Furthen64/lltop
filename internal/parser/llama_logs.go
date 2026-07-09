@@ -47,6 +47,17 @@ type ParsedLine struct {
 	HintMessage         string
 }
 
+const (
+	ErrorKindCUDAOutOfMemory ErrorKind = "cuda_oom"
+	ErrorKindLoadModel       ErrorKind = "load_model"
+	ErrorKindBind            ErrorKind = "bind"
+	ErrorKindUnknownArg      ErrorKind = "unknown_argument"
+	ErrorKindInvalidArg      ErrorKind = "invalid_argument"
+	ErrorKindOpenModel       ErrorKind = "open_model"
+)
+
+type ErrorKind string
+
 var (
 	promptEvalRe = regexp.MustCompile(`prompt eval time =\s+(\d+\.\d+) ms /\s+(\d+) tokens.*?(\d+\.\d+) ms per token.*?(\d+\.\d+) tokens per second`)
 	evalRe       = regexp.MustCompile(`eval time =\s+(\d+\.\d+) ms /\s+(\d+) tokens.*?(\d+\.\d+) ms per token.*?(\d+\.\d+) tokens per second`)
@@ -138,22 +149,22 @@ func ParseLine(line string) ParsedLine {
 	switch {
 	case strings.Contains(lower, "cuda out of memory"):
 		p.IsError = true
-		p.ErrorKind = "cuda_oom"
+		p.ErrorKind = string(ErrorKindCUDAOutOfMemory)
 	case strings.Contains(lower, "failed to load model"):
 		p.IsError = true
-		p.ErrorKind = "load_model"
+		p.ErrorKind = string(ErrorKindLoadModel)
 	case strings.Contains(lower, "failed to bind"):
 		p.IsError = true
-		p.ErrorKind = "bind"
+		p.ErrorKind = string(ErrorKindBind)
 	case strings.Contains(lower, "unknown argument"):
 		p.IsError = true
-		p.ErrorKind = "unknown_argument"
+		p.ErrorKind = string(ErrorKindUnknownArg)
 	case strings.Contains(lower, "invalid argument"):
 		p.IsError = true
-		p.ErrorKind = "invalid_argument"
+		p.ErrorKind = string(ErrorKindInvalidArg)
 	case strings.Contains(lower, "cannot open model"):
 		p.IsError = true
-		p.ErrorKind = "open_model"
+		p.ErrorKind = string(ErrorKindOpenModel)
 	}
 	if p.IsError {
 		p.ErrorMessage = strings.TrimSpace(line)
