@@ -12,6 +12,8 @@ import (
 
 const MaxLogLines = 500
 
+const LlamaServerBinary = "llama-server"
+
 type GlobalConfig struct {
 	LlamaServer             string `toml:"llama_server"`
 	ModelsDir               string `toml:"models_dir"`

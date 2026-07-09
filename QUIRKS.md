@@ -58,11 +58,11 @@
 
 **Fix applied:** Exported `defaultEditor()` as `DefaultEditor()` in `config.go`. The `openEditor` function in `model.go` now calls `config.DefaultEditor()` instead of duplicating the OS check. Removed unused `runtime` import from `model.go`.
 
-### 9. `"llama-server"` binary name appears in 3 files
+### 9. `"llama-server"` binary name appears in 3 files — ✅ COMPLETED
 
 **Files:** `internal/config/first_run_wizard.go:207,279` and `internal/ui/external_process.go:55`
 
-Extract to a constant like `const LlamaServerBinary = "llama-server"`.
+**Fix applied:** Added `const LlamaServerBinary = "llama-server"` to `internal/config/config.go`. All three sites now reference `config.LlamaServerBinary`.
 
 ### 10. Scanner buffer sizes as magic numbers
 

@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const llamaServerBinary = "llama-server"
+
 type externalProcess struct {
 	PID     int
 	Command string
@@ -52,7 +54,7 @@ func parseExternalLlamaServer(psOutput string, selfPID int) (externalProcess, bo
 			continue
 		}
 		comm := fields[1]
-		if comm != "llama-server" {
+		if comm != llamaServerBinary {
 			continue
 		}
 		return externalProcess{

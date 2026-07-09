@@ -204,7 +204,7 @@ func resolveLlamaServerPath(path string) (string, error) {
 		}
 		return path, nil
 	}
-	matches, err := findNamedExecutables(path, "llama-server", llamaServerSearchDepth)
+	matches, err := findNamedExecutables(path, LlamaServerBinary, llamaServerSearchDepth)
 	if err != nil {
 		return "", err
 	}
@@ -276,7 +276,7 @@ func optionalDirectory(path string) error {
 }
 
 func detectLlamaServerPath() string {
-	path, err := exec.LookPath("llama-server")
+	path, err := exec.LookPath(LlamaServerBinary)
 	if err != nil {
 		return ""
 	}
