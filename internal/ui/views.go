@@ -44,19 +44,19 @@ func (m *Model) View() string {
 	statusBar := m.renderStatusBar(width)
 	layout := computeMainLayout(width, height-1, m.showHelp)
 
-	profilesPanel := panelStyle.Width(max(1, layout.leftW-2)).Height(max(1, layout.profilesH-2)).Render(m.renderProfiles())
-	logsPanel := panelStyle.Width(max(1, layout.rightW-2)).Height(max(1, layout.logsH-2)).Render(m.renderLogs())
+	profilesPanel := renderPanel(layout.leftW, layout.profilesH, m.renderProfiles())
+	logsPanel := renderPanel(layout.rightW, layout.logsH, m.renderLogs())
 	top := lipgloss.JoinHorizontal(lipgloss.Top, profilesPanel, logsPanel)
 	if layout.stacked {
 		top = lipgloss.JoinVertical(lipgloss.Left, profilesPanel, logsPanel)
 	}
 
-	status := panelStyle.Width(max(1, width-2)).Height(max(1, layout.statusH-2)).Render(m.renderStatus())
+	status := renderPanel(width, layout.statusH, m.renderStatus())
 	bottomContent := m.renderKeys()
 	if m.confirmMode {
 		bottomContent = titleStyle.Render("confirm") + "\n\n" + m.confirmPrompt
 	}
-	bottom := panelStyle.Width(max(1, width-2)).Height(max(1, layout.keysH-2)).Render(bottomContent)
+	bottom := renderPanel(width, layout.keysH, bottomContent)
 
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, top, status, bottom)
 }
@@ -66,18 +66,33 @@ func (m *Model) renderNotesView(width, height int) string {
 	topH, statusH, keysH := layoutHeights(height-1, m.showHelp)
 	leftW, rightW := splitColumns(width, 0.35, 28, 40)
 
-	runsPanel := panelStyle.Width(max(1, leftW-2)).Height(max(1, topH-2)).Render(m.renderNoteRuns())
-	notePanel := panelStyle.Width(max(1, rightW-2)).Height(max(1, topH-2)).Render(m.renderNoteContent())
+	runsPanel := renderPanel(leftW, topH, m.renderNoteRuns())
+	notePanel := renderPanel(rightW, topH, m.renderNoteContent())
 	top := lipgloss.JoinHorizontal(lipgloss.Top, runsPanel, notePanel)
 
-	status := panelStyle.Width(max(1, width-2)).Height(max(1, statusH-2)).Render(m.renderNoteStatus())
+	status := renderPanel(width, statusH, m.renderNoteStatus())
 	bottomContent := m.renderKeys()
 	if m.confirmMode {
 		bottomContent = titleStyle.Render("confirm") + "\n\n" + m.confirmPrompt
 	}
-	bottom := panelStyle.Width(max(1, width-2)).Height(max(1, keysH-2)).Render(bottomContent)
+	bottom := renderPanel(width, keysH, bottomContent)
 
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, top, status, bottom)
+}
+
+func renderPanel(width, height int, content string) string {
+	// Clip content before rendering the panel so truncation never removes its border.
+	contentWidth := max(1, width-4) // border and horizontal padding
+	contentHeight := max(1, height-2)
+	content = lipgloss.NewStyle().
+		Width(contentWidth).
+		MaxWidth(contentWidth).
+		MaxHeight(contentHeight).
+		Render(content)
+	return panelStyle.
+		Width(max(1, width-2)).
+		Height(max(1, height-2)).
+		Render(content)
 }
 
 func (m *Model) renderProfiles() string {
@@ -387,12 +402,12 @@ func (m *Model) renderStatusBar(width int) string {
 	}
 
 	tag := tagStyle.Render(statusTag)
-	padding := width - lipgloss.Width(tag) - lipgloss.Width(statusInfo) - 4
+	padding := width - lipgloss.Width(tag) - lipgloss.Width(statusInfo) - 2
 	if padding < 1 {
 		padding = 1
 	}
 	fill := strings.Repeat(" ", padding)
-	return statusBarStyle.Render(tag + fill + statusInfo)
+	return statusBarStyle.Width(max(1, width)).MaxWidth(max(1, width)).Render(tag + fill + statusInfo)
 }
 
 func (m *Model) renderKeys() string {
@@ -486,15 +501,15 @@ func layoutHeights(height int, showHelp bool) (topH, statusH, keysH int) {
 	if height <= 0 {
 		return 1, 1, 1
 	}
-	if height <= 12 {
+	if height < 18 {
 		keysMin := 3
 		if showHelp {
 			keysMin = 4
 		}
-		topH = max(4, height-4)
-		keysH = min(keysMin, max(1, height-topH-1))
+		keysH = min(keysMin, max(1, height-2))
+		statusH = max(1, (height-keysH)/3)
+		topH = max(1, height-statusH-keysH)
 		statusH = max(1, height-topH-keysH)
-		keysH = max(1, height-topH-statusH)
 		return topH, statusH, keysH
 	}
 
@@ -537,9 +552,9 @@ func computeMainLayout(width, height int, showHelp bool) mainLayoutSpec {
 	layout.stacked = true
 	layout.leftW = width
 	layout.rightW = width
-	layout.profilesH = min(max(6, topH/3), max(6, topH-6))
-	layout.logsH = max(6, topH-layout.profilesH)
-	layout.profilesH = max(4, topH-layout.logsH)
+	layout.profilesH = min(max(3, topH/3), max(3, topH-3))
+	layout.logsH = max(3, topH-layout.profilesH)
+	layout.profilesH = max(3, topH-layout.logsH)
 	return layout
 }
 

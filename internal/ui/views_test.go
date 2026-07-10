@@ -11,6 +11,7 @@ import (
 	"github.com/Furthen64/lltop/internal/history"
 	"github.com/Furthen64/lltop/internal/runner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func testGlobalConfig() *config.GlobalConfig {
@@ -111,6 +112,50 @@ func TestComputeMainLayout_StacksWhenTerminalIsNarrow(t *testing.T) {
 	}
 	if layout.logsH < layout.profilesH {
 		t.Fatalf("expected logs to keep at least as much height as profiles, got profiles=%d logs=%d", layout.profilesH, layout.logsH)
+	}
+}
+
+func TestViewFitsTerminalAfterResize(t *testing.T) {
+	m := NewModel(testGlobalConfig(), []*config.Profile{testProfile()}, "a status message that wraps on narrow terminals")
+	m.logLines = []string{strings.Repeat("log output ", 20)}
+
+	for _, size := range []struct {
+		width  int
+		height int
+	}{
+		{width: 120, height: 40},
+		{width: 83, height: 24},
+		{width: 60, height: 16},
+		{width: 40, height: 13},
+	} {
+		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+		view := m.View()
+		if got := lipgloss.Width(view); got > size.width {
+			t.Errorf("view width after resize to %dx%d = %d", size.width, size.height, got)
+		}
+		if got := lipgloss.Height(view); got > size.height {
+			t.Errorf("view height after resize to %dx%d = %d", size.width, size.height, got)
+		}
+
+		m.viewMode = notesView
+		notesView := m.View()
+		if got := lipgloss.Width(notesView); got > size.width {
+			t.Errorf("notes view width after resize to %dx%d = %d", size.width, size.height, got)
+		}
+		if got := lipgloss.Height(notesView); got > size.height {
+			t.Errorf("notes view height after resize to %dx%d = %d", size.width, size.height, got)
+		}
+		m.viewMode = mainView
+	}
+}
+
+func TestRenderPanelKeepsRequestedBoundsWithOverflowingContent(t *testing.T) {
+	panel := renderPanel(20, 5, strings.Repeat("content ", 20))
+	if got := lipgloss.Width(panel); got != 20 {
+		t.Fatalf("panel width = %d, want 20", got)
+	}
+	if got := lipgloss.Height(panel); got != 5 {
+		t.Fatalf("panel height = %d, want 5", got)
 	}
 }
 
